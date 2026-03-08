@@ -153,10 +153,15 @@ class TestLogisticDemand:
 
     def test_demand_decreases_with_price(self):
         """Higher multiplier -> lower demand."""
-        model, tc = self._make_model(n=1)
+        # Use explicit params with strong elasticity to ensure clear directional effect
+        x0 = np.array([0.80])
+        tc = np.array([500.0])
+        # Strong price semi-elasticity: -0.005 (at p=500, elasticity ~ -2.5)
+        elast_price = np.array([-0.005])
+        model = LogisticDemand(x0=x0, elasticity=elast_price, technical_price=tc)
         d1 = model.demand(np.array([1.0]))[0]
         d2 = model.demand(np.array([1.1]))[0]
-        assert d2 < d1
+        assert d2 < d1, f"Demand should fall at higher price: {d2:.6f} vs {d1:.6f}"
 
     def test_gradient_finite_difference(self):
         """Analytical gradient matches finite-difference."""

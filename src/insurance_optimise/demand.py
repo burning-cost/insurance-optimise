@@ -132,11 +132,12 @@ class LogisticDemand:
         # Derive logistic parameters from (x0, elasticity, p0)
         # p0 = technical_price (at multiplier m=1)
         p0 = self.tc
-        # beta: semi-elasticity = beta * x * (1 - x) -> beta = elast / (x * (1-x)) * x
-        # Actually: d(log x)/dp = beta*(1-x) so elast = p*beta*(1-x)
-        # => beta = elast / (p0 * (1 - x0))
+        # d(log x)/dp = -(1-x)*beta (since x = 1/(1+exp(alpha+beta*p)))
+        # Setting equal to elasticity (negative): -(1-x0)*beta = elasticity
+        # => beta = -elasticity / (p0 * (1 - x0))  [positive, since elasticity < 0]
         x0_clipped = np.clip(self.x0, 1e-6, 1 - 1e-6)
-        self.beta = self.elasticity / (p0 * (1.0 - x0_clipped))
+        # d(log x)/dp = -(1-x)*beta => beta = -elasticity / (p0 * (1-x0))
+        self.beta = -self.elasticity / (p0 * (1.0 - x0_clipped))
         # alpha: x0 = 1/(1+exp(alpha + beta*p0))
         # => alpha = log(1/x0 - 1) - beta * p0
         self.alpha = np.log(1.0 / x0_clipped - 1.0) - self.beta * p0
