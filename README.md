@@ -1,0 +1,181 @@
+# insurance-optimise
+
+Constrained portfolio rate optimisation for UK personal lines insurance.
+
+## The problem
+
+You have a pricing model. It tells you the right technical price for each risk. But "technically correct" isn't the only constraint. You also have:
+
+- FCA PS21/11: renewal premiums cannot exceed what a new customer would be quoted (ENBP)
+- Consumer Duty: you need to demonstrate fair value, not just set prices actuarially
+- A target loss ratio you're trying to hit
+- A retention floor you can't fall below without the underwriting team getting anxious
+- Rate-change limits — you can't shock customers with 40% increases even if the model says so
+
+The question is: what set of price multipliers maximises profit subject to all of these constraints simultaneously?
+
+That's what this library solves.
+
+## What it does
+
+- Maximise expected profit (or minimise combined ratio) subject to any combination of:
+  - **ENBP** constraint — FCA PS21/11 hard ceiling per renewal policy
+  - **Loss ratio** bounds (deterministic or Branda 2014 stochastic formulation)
+  - **Volume retention** floor
+  - **GWP** bounds
+  - **Maximum rate change** per policy
+  - **Technical floor** — price >= cost
+- Analytical gradients throughout — fast enough for N=10,000 policies in SLSQP
+- Efficient frontier sweep — show the pricing team the profit-retention trade-off curve
+- Scenario mode — run under pessimistic/central/optimistic elasticity assumptions
+- JSON audit trail — every run produces evidence of ENBP enforcement for FCA scrutiny
+
+## Install
+
+```bash
+pip install insurance-optimise
+```
+
+## Quick start
+
+```python
+import numpy as np
+from insurance_optimise import PortfolioOptimiser, ConstraintConfig
+
+# Inputs come from upstream technical and elasticity models
+config = ConstraintConfig(
+    lr_max=0.70,
+    retention_min=0.85,
+    max_rate_change=0.20,
+    enbp_buffer=0.01,   # 1% safety margin below ENBP
+    technical_floor=True,
+)
+
+opt = PortfolioOptimiser(
+    technical_price=df["technical_price"].to_numpy(),
+    expected_loss_cost=df["expected_loss_cost"].to_numpy(),
+    p_demand=df["p_renewal"].to_numpy(),
+    elasticity=df["price_elasticity"].to_numpy(),
+    renewal_flag=df["is_renewal"].to_numpy(),
+    enbp=df["enbp"].to_numpy(),
+    constraints=config,
+)
+
+result = opt.optimise()
+
+print(result)
+# OptimisationResult(CONVERGED, N=5000, profit=1,234,567, gwp=8,900,000, lr=0.681)
+
+# Attach optimal prices back to your data
+df = df.with_columns([
+    pl.Series("optimal_multiplier", result.multipliers),
+    pl.Series("optimal_premium", result.new_premiums),
+])
+
+# Save audit trail for FCA
+result.save_audit("renewal_run_2025_q1_audit.json")
+```
+
+## Efficient frontier
+
+The frontier tells your pricing team: "if we're willing to lose X points of retention, we gain Y points of profit margin." This is the conversation that actually needs to happen in pricing reviews.
+
+```python
+from insurance_optimise import EfficientFrontier
+
+frontier = EfficientFrontier(
+    opt,
+    sweep_param="volume_retention",
+    sweep_range=(0.80, 0.96),
+    n_points=15,
+)
+result = frontier.run()
+print(result.data)  # DataFrame: epsilon, profit, gwp, loss_ratio, retention
+
+frontier.plot()  # matplotlib
+```
+
+## Scenario mode
+
+Elasticity estimates carry uncertainty. The simplest honest approach is to run under three scenarios and report the spread:
+
+```python
+result_scenarios = opt.optimise_scenarios(
+    elasticity_scenarios=[
+        elasticity * 0.75,   # pessimistic (customers more price-sensitive)
+        elasticity,          # central estimate
+        elasticity * 1.25,   # optimistic (customers less price-sensitive)
+    ],
+    scenario_names=["pessimistic", "central", "optimistic"],
+)
+print(result_scenarios.summary())
+# scenario     converged    profit    gwp    loss_ratio
+# pessimistic  True         1.1M      8.5M   0.692
+# central      True         1.3M      8.8M   0.681
+# optimistic   True         1.5M      9.1M   0.672
+```
+
+## Constraint reference
+
+| Constraint | Config parameter | Notes |
+|---|---|---|
+| FCA ENBP | `enbp_buffer=0.01` | Applied as upper bound on renewal multiplier |
+| Max LR | `lr_max=0.70` | Deterministic or stochastic (Branda 2014) |
+| Min LR | `lr_min=0.55` | Prevents unsustainable cross-subsidies |
+| Min GWP | `gwp_min=50_000_000` | Portfolio size floor |
+| Max GWP | `gwp_max=100_000_000` | Optional ceiling |
+| Min retention | `retention_min=0.85` | Renewal book only |
+| Max rate change | `max_rate_change=0.20` | Per policy, both directions |
+| Technical floor | `technical_floor=True` | Enforces price >= cost |
+| Stochastic LR | `stochastic_lr=True` | Requires `claims_variance` input |
+
+## Demand models
+
+Two built-in demand models:
+
+**Log-linear (default):** `x(m) = x0 * m^epsilon`
+
+Constant price elasticity. Works well with outputs from `insurance-elasticity`. Demand is always positive. Gradient is analytic and fast.
+
+**Logistic:** `x(m) = sigmoid(alpha + beta * m * tc)`
+
+Demand is bounded in (0,1). More appropriate for renewal probabilities when you want them to stay interpretable as probabilities. Requires conversion from elasticity estimate to logistic parameters.
+
+## Solver details
+
+Primary solver is SLSQP via `scipy.optimize.minimize`. Analytical gradients are provided for the objective and all constraints — without them, SLSQP uses finite differences (2N extra evaluations per iteration, prohibitively slow for large N).
+
+SLSQP is known to sometimes report success when starting from the initial point without moving. The library uses `ftol=1e-9` (tighter than scipy's default 1e-6) and verifies constraint satisfaction after solve. If you see `converged=False`, the solution may still be useful but treat it with caution.
+
+For N > 5,000, consider segment aggregation before optimising.
+
+## Regulatory context
+
+Under FCA Consumer Duty (effective July 2023), firms must demonstrate that pricing practices deliver fair value. Under PS21/11, renewal premiums must not exceed the ENBP — this is not a soft target, it is enforceable.
+
+This library enforces ENBP at the code level. The JSON audit trail records the constraint configuration, the solution, and whether ENBP was binding for each renewal policy. You can show this to the FCA.
+
+Commercial tools (Akur8, WTW Radar, Earnix) do not expose their optimisation methodology. This library does.
+
+## Pipeline position
+
+```
+[Technical model (GLM/GBM)]
+        ↓ technical_price, expected_loss_cost
+[insurance-elasticity]
+        ↓ p_demand, elasticity, enbp
+[insurance-optimise]  ← this library
+        ↓ optimal_multiplier per policy
+[Rating engine / ratebook update]
+```
+
+## References
+
+- FCA PS21/11 (ENBP): https://www.fca.org.uk/publication/policy/ps21-11.pdf
+- Branda (2014): stochastic LR constraint via one-sided Chebyshev inequality
+- Emms & Haberman (2005): theoretical foundation for demand-linked insurance pricing
+- Spedicato, Dutang & Petrini (2018): ML-then-optimise pipeline in practice
+
+## Licence
+
+MIT
