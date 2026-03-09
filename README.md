@@ -1,4 +1,5 @@
 # insurance-optimise
+[![Tests](https://github.com/burning-cost/insurance-optimise/actions/workflows/ci.yml/badge.svg)](https://github.com/burning-cost/insurance-optimise/actions/workflows/ci.yml)
 
 Constrained portfolio rate optimisation for UK personal lines insurance.
 
