@@ -1,5 +1,8 @@
 # insurance-optimise
+
 [![Tests](https://github.com/burning-cost/insurance-optimise/actions/workflows/ci.yml/badge.svg)](https://github.com/burning-cost/insurance-optimise/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/insurance-optimise)](https://pypi.org/project/insurance-optimise/)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 
 Constrained portfolio rate optimisation for UK personal lines insurance.
 
@@ -169,6 +172,22 @@ Commercial tools (Akur8, WTW Radar, Earnix) do not expose their optimisation met
         ↓ optimal_multiplier per policy
 [Rating engine / ratebook update]
 ```
+
+## Read more
+
+[Your Rate Changes Are Leaving Money on the Table](https://burning-cost.github.io/2026/03/08/insurance-optimise.html) — why manual scenario-in-a-spreadsheet pricing is guaranteed to be suboptimal, and how constrained optimisation fixes it.
+
+## Related libraries
+
+| Library | Why it's relevant |
+|---------|------------------|
+| [insurance-elasticity](https://github.com/burning-cost/insurance-elasticity) | Price elasticity and demand modelling — provides the `p_demand` and `elasticity` inputs this library requires |
+| [insurance-survival](https://github.com/burning-cost/insurance-survival) | Survival-adjusted CLV — use CLV outputs to inform retention constraints rather than setting them arbitrarily |
+| [insurance-causal-policy](https://github.com/burning-cost/insurance-causal-policy) | SDID causal evaluation — after running the optimiser, use this to prove the rate change achieved what it was supposed to |
+| [insurance-monitoring](https://github.com/burning-cost/insurance-monitoring) | Model monitoring — the optimised strategy will degrade as the portfolio drifts; this library catches when it needs refreshing |
+| [rate-optimiser](https://github.com/burning-cost/rate-optimiser) | Factor-level rate change optimisation — this library optimises at the policy level; rate-optimiser adjusts the rating factor structure |
+
+[All Burning Cost libraries →](https://burning-cost.github.io)
 
 ## References
 
