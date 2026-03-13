@@ -44,6 +44,7 @@ pip install insurance-optimise
 
 ```python
 import numpy as np
+import polars as pl
 from insurance_optimise import PortfolioOptimiser, ConstraintConfig
 
 # Inputs come from upstream technical and elasticity models
@@ -55,11 +56,13 @@ config = ConstraintConfig(
     technical_floor=True,
 )
 
+elasticity = df["price_elasticity"].to_numpy()
+
 opt = PortfolioOptimiser(
     technical_price=df["technical_price"].to_numpy(),
     expected_loss_cost=df["expected_loss_cost"].to_numpy(),
     p_demand=df["p_renewal"].to_numpy(),
-    elasticity=df["price_elasticity"].to_numpy(),
+    elasticity=elasticity,
     renewal_flag=df["is_renewal"].to_numpy(),
     enbp=df["enbp"].to_numpy(),
     constraints=config,
