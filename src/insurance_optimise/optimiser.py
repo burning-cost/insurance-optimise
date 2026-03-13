@@ -54,7 +54,7 @@ from insurance_optimise.constraints import (
     build_bounds,
     build_scipy_constraints,
 )
-from insurance_optimise.demand import make_demand_model
+from insurance_optimise._demand_model import make_demand_model
 from insurance_optimise.result import OptimisationResult
 
 
@@ -470,7 +470,7 @@ class PortfolioOptimiser:
         ScenarioResult
         """
         from insurance_optimise.result import ScenarioResult
-        from insurance_optimise.demand import make_demand_model
+        from insurance_optimise._demand_model import make_demand_model
 
         if scenario_names is None:
             scenario_names = [f"scenario_{i}" for i in range(len(elasticity_scenarios))]

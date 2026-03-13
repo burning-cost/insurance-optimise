@@ -35,7 +35,7 @@ import numpy as np
 from scipy.optimize import Bounds
 
 if TYPE_CHECKING:
-    from insurance_optimise.demand import LogLinearDemand, LogisticDemand
+    from insurance_optimise._demand_model import LogLinearDemand, LogisticDemand
 
 
 @dataclass

@@ -13,7 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from insurance_optimise.demand import LogLinearDemand, LogisticDemand, make_demand_model
+from insurance_optimise._demand_model import LogLinearDemand, LogisticDemand, make_demand_model
 
 
 # ---------------------------------------------------------------------------

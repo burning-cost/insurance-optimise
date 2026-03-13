@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from insurance_optimise.demand import make_demand_model
+from insurance_optimise._demand_model import make_demand_model
 
 
 class ScenarioObjective:

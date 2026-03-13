@@ -8,6 +8,14 @@ Solves the insurance pricing optimisation problem:
 - Efficient frontier via epsilon-constraint sweep
 - JSON audit trail for FCA regulatory evidence
 
+The ``demand`` subpackage (``insurance_optimise.demand``) is the full demand
+modelling suite absorbed from insurance-demand:
+- ConversionModel: P(buy | price, features) for new business quotes
+- RetentionModel: P(renew | features, price_change) for existing customers
+- ElasticityEstimator: DML-based causal price elasticity from observational data
+- DemandCurve: price → demand probability curves
+- ENBPChecker: PS21/11 compliance diagnostic
+
 Typical workflow
 ----------------
 >>> import numpy as np
@@ -39,7 +47,7 @@ References
 """
 
 from insurance_optimise.constraints import ConstraintConfig
-from insurance_optimise.demand import LogLinearDemand, LogisticDemand, make_demand_model
+from insurance_optimise._demand_model import LogLinearDemand, LogisticDemand, make_demand_model
 from insurance_optimise.frontier import EfficientFrontier
 from insurance_optimise.optimiser import PortfolioOptimiser
 from insurance_optimise.result import (
@@ -49,8 +57,9 @@ from insurance_optimise.result import (
     ScenarioResult,
 )
 from insurance_optimise.scenarios import ScenarioObjective
+from insurance_optimise import demand
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "PortfolioOptimiser",
@@ -64,5 +73,6 @@ __all__ = [
     "LogisticDemand",
     "make_demand_model",
     "ScenarioObjective",
+    "demand",
     "__version__",
 ]

@@ -21,7 +21,7 @@ from insurance_optimise.constraints import (
     build_bounds,
     build_scipy_constraints,
 )
-from insurance_optimise.demand import LogLinearDemand
+from insurance_optimise._demand_model import LogLinearDemand
 
 
 def _make_demand(n: int, seed: int = 0) -> LogLinearDemand:
