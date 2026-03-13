@@ -189,6 +189,13 @@ Commercial tools (Akur8, WTW Radar, Earnix) do not expose their optimisation met
 
 [All Burning Cost libraries →](https://burning-cost.github.io)
 
+## Source repos
+
+This package consolidates two previously separate libraries:
+
+- `insurance-optimise` — core portfolio optimiser (v0.1.x), now v0.2.0 with demand subpackage
+- `insurance-dro` — archived; scenario-based robust optimisation absorbed into `ScenarioObjective` and `CVaRConstraint` in this package. Full Distributionally Robust Optimisation (Wasserstein DRO) was evaluated and deprioritised in favour of the simpler scenario sweep — see the design rationale in `scenarios.py`.
+
 ## References
 
 - FCA PS21/11 (ENBP): https://www.fca.org.uk/publication/policy/ps21-11.pdf
