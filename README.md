@@ -196,6 +196,25 @@ This package consolidates two previously separate libraries:
 - `insurance-optimise` — core portfolio optimiser (v0.1.x), now v0.2.0 with demand subpackage
 - `insurance-dro` — archived; scenario-based robust optimisation absorbed into `ScenarioObjective` and `CVaRConstraint` in this package. Full Distributionally Robust Optimisation (Wasserstein DRO) was evaluated and deprioritised in favour of the simpler scenario sweep — see the design rationale in `scenarios.py`.
 
+---
+
+## Performance
+
+Benchmarked against **naive logistic regression** (for elasticity estimation) and **flat pricing** (for commercial impact) on synthetic UK motor PCW quote panel — 50,000 quotes, true price elasticity −2.0, confounded assignment (high-risk customers face higher prices and have lower sensitivity). Full notebook: `notebooks/benchmark_demand.py`.
+
+| Metric | Naive logistic regression | DML ElasticityEstimator | Notes |
+|--------|--------------------------|------------------------|-------|
+| Estimated elasticity | biased (conflates risk and price effects) | near −2.0 | true effect is −2.0 |
+| Absolute bias | substantial (direction: overestimates sensitivity) | near zero | primary metric |
+| 95% CI valid | no | yes | Neyman-orthogonal |
+
+The benchmark then uses the estimated elasticities to compare revenue per quote under demand-curve-aware pricing against flat loading across all segments. Segments with heterogeneous elasticities (young drivers vs. mature drivers on PCWs, for example) are systematically mispriced by flat loading — the optimiser captures revenue by pricing to each segment's actual demand curve.
+
+**When to use:** New business pricing on price comparison websites where some segments are highly elastic and others are captive. The combination of DML elasticity estimation and constrained optimisation is justified when elasticity varies materially across the book and the ENBP constraint is binding.
+
+**When NOT to use:** When price is randomly assigned (genuine A/B test) — naive regression is unbiased and DML adds no value. When the book is small or the treatment variation is thin, the DML confidence intervals will be wide and the optimiser will produce near-flat recommendations anyway.
+
+
 ## References
 
 - FCA PS21/11 (ENBP): https://www.fca.org.uk/publication/policy/ps21-11.pdf
