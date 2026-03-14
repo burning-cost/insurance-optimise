@@ -235,6 +235,15 @@ The benchmark then uses the estimated elasticities to compare revenue per quote 
 - Emms & Haberman (2005): theoretical foundation for demand-linked insurance pricing
 - Spedicato, Dutang & Petrini (2018): ML-then-optimise pipeline in practice
 
+
+## Related Libraries
+
+| Library | What it does |
+|---------|-------------|
+| [insurance-demand](https://github.com/burning-cost/insurance-demand) | Conversion and retention modelling — demand curves from this library are the primary input to the optimiser |
+| [insurance-elasticity](https://github.com/burning-cost/insurance-elasticity) | Causal price elasticity — elasticity estimates define the demand response surface the optimiser maximises over |
+| [insurance-deploy](https://github.com/burning-cost/insurance-deploy) | Model deployment — optimised rates flow into the champion/challenger deployment framework |
+
 ## Licence
 
 MIT
