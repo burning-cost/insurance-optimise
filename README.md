@@ -68,6 +68,8 @@ config = ConstraintConfig(
     technical_floor=True,
 )
 
+elasticity = df["price_elasticity"].to_numpy()
+
 opt = PortfolioOptimiser(
     technical_price=technical_price,
     expected_loss_cost=expected_loss_cost,
