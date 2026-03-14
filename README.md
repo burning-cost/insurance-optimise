@@ -44,9 +44,22 @@ pip install insurance-optimise
 
 ```python
 import numpy as np
+import polars as pl
 from insurance_optimise import PortfolioOptimiser, ConstraintConfig
 
-# Inputs come from upstream technical and elasticity models
+# Synthetic UK motor renewal book — 500 policies
+# In production, these come from your technical model and elasticity estimator
+rng = np.random.default_rng(42)
+n = 500
+
+technical_price   = rng.uniform(300, 1200, n)          # GLM output
+expected_loss_cost = technical_price * rng.uniform(0.55, 0.75, n)  # expected claims
+p_renewal         = rng.uniform(0.70, 0.95, n)          # renewal probability at current price
+price_elasticity  = rng.uniform(-2.5, -0.8, n)          # from insurance-elasticity
+is_renewal        = rng.choice([True, False], n, p=[0.7, 0.3])
+# ENBP: FCA PS21/11 — renewal premium cannot exceed new business quote
+enbp              = technical_price * rng.uniform(0.95, 1.10, n)
+
 config = ConstraintConfig(
     lr_max=0.70,
     retention_min=0.85,
@@ -56,25 +69,26 @@ config = ConstraintConfig(
 )
 
 opt = PortfolioOptimiser(
-    technical_price=df["technical_price"].to_numpy(),
-    expected_loss_cost=df["expected_loss_cost"].to_numpy(),
-    p_demand=df["p_renewal"].to_numpy(),
-    elasticity=df["price_elasticity"].to_numpy(),
-    renewal_flag=df["is_renewal"].to_numpy(),
-    enbp=df["enbp"].to_numpy(),
+    technical_price=technical_price,
+    expected_loss_cost=expected_loss_cost,
+    p_demand=p_renewal,
+    elasticity=price_elasticity,
+    renewal_flag=is_renewal,
+    enbp=enbp,
     constraints=config,
 )
 
 result = opt.optimise()
 
 print(result)
-# OptimisationResult(CONVERGED, N=5000, profit=1,234,567, gwp=8,900,000, lr=0.681)
+# OptimisationResult(converged=True, N=500, profit=..., gwp=..., lr=0.681)
 
 # Attach optimal prices back to your data
-df = df.with_columns([
-    pl.Series("optimal_multiplier", result.multipliers),
-    pl.Series("optimal_premium", result.new_premiums),
-])
+df = pl.DataFrame({
+    "technical_price":    technical_price.tolist(),
+    "optimal_multiplier": result.multipliers.tolist(),
+    "optimal_premium":    result.new_premiums.tolist(),
+})
 
 # Save audit trail for FCA
 result.save_audit("renewal_run_2025_q1_audit.json")
@@ -106,9 +120,9 @@ Elasticity estimates carry uncertainty. The simplest honest approach is to run u
 ```python
 result_scenarios = opt.optimise_scenarios(
     elasticity_scenarios=[
-        elasticity * 0.75,   # pessimistic (customers more price-sensitive)
-        elasticity,          # central estimate
-        elasticity * 1.25,   # optimistic (customers less price-sensitive)
+        price_elasticity * 0.75,   # pessimistic (customers more price-sensitive)
+        price_elasticity,          # central estimate
+        price_elasticity * 1.25,   # optimistic (customers less price-sensitive)
     ],
     scenario_names=["pessimistic", "central", "optimistic"],
 )
