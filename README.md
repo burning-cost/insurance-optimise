@@ -193,6 +193,11 @@ Commercial tools (Akur8, WTW Radar, Earnix) do not expose their optimisation met
 
 [Your Rate Changes Are Leaving Money on the Table](https://burning-cost.github.io/2026/03/08/insurance-optimise.html) — why manual scenario-in-a-spreadsheet pricing is guaranteed to be suboptimal, and how constrained optimisation fixes it.
 
+
+## Databricks Notebook
+
+A ready-to-run Databricks notebook benchmarking this library against standard approaches is available in [burning-cost-examples](https://github.com/burning-cost/burning-cost-examples/blob/main/notebooks/insurance_optimise_demo.py).
+
 ## Related libraries
 
 | Library | Why it's relevant |
