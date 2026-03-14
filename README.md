@@ -58,7 +58,7 @@ p_renewal         = rng.uniform(0.70, 0.95, n)          # renewal probability at
 price_elasticity  = rng.uniform(-2.5, -0.8, n)          # from insurance-elasticity
 is_renewal        = rng.choice([True, False], n, p=[0.7, 0.3])
 # ENBP: FCA PS21/11 — renewal premium cannot exceed new business quote
-enbp              = technical_price * rng.uniform(0.95, 1.10, n)
+enbp              = technical_price * rng.uniform(1.05, 1.25, n)  # must exceed technical_price
 
 config = ConstraintConfig(
     lr_max=0.70,
@@ -82,6 +82,8 @@ result = opt.optimise()
 
 print(result)
 # OptimisationResult(converged=True, N=500, profit=..., gwp=..., lr=0.681)
+
+print(result.profit)         # shorthand alias for result.expected_profit
 
 # Attach optimal prices back to your data
 df = pl.DataFrame({

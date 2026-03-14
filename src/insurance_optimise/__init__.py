@@ -38,6 +38,7 @@ Typical workflow
 ... )
 >>> result = opt.optimise()
 >>> print(result)
+>>> print(result.profit)   # shorthand alias for result.expected_profit
 
 Stochastic LR constraint
 ------------------------
@@ -75,7 +76,7 @@ from insurance_optimise.scenarios import ScenarioObjective
 from insurance_optimise.stochastic import ClaimsVarianceModel
 from insurance_optimise import demand
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 __all__ = [
     "PortfolioOptimiser",

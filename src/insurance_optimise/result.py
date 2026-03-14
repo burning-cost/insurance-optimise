@@ -78,6 +78,11 @@ class OptimisationResult:
     audit_trail: dict[str, Any]
     summary_df: pl.DataFrame
 
+    @property
+    def profit(self) -> float:
+        """Alias for expected_profit. Convenience shorthand."""
+        return self.expected_profit
+
     def to_json(self) -> str:
         """Return the audit trail as a JSON string."""
         return json.dumps(self.audit_trail, indent=2, default=_json_default)
