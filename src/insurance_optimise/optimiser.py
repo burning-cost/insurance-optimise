@@ -254,21 +254,52 @@ class PortfolioOptimiser:
     # ------------------------------------------------------------------
 
     def _solve_once(self, x0: np.ndarray) -> Any:
-        """Run scipy.optimize.minimize once from initial point x0."""
+        """Run scipy.optimize.minimize once from initial point x0.
+
+        Wraps the scipy call to handle a known SLSQP edge case where the
+        Fortran subroutine returns an exit code that is not in scipy's
+        exit_modes dict (e.g. 676972397 on large problems or certain
+        platform/compiler combinations).  When this happens we construct a
+        synthetic failure result rather than propagating a KeyError.
+        """
         if self.solver_method == "SLSQP":
             options = {"ftol": self.ftol, "maxiter": self.maxiter, "disp": False}
         else:
             options = {"maxiter": self.maxiter, "verbose": 0}
 
-        result = minimize(
-            fun=self._neg_profit,
-            x0=x0,
-            jac=self._neg_profit_gradient,
-            method=self.solver_method,
-            bounds=self._bounds,
-            constraints=self._scipy_constraints,
-            options=options,
-        )
+        try:
+            result = minimize(
+                fun=self._neg_profit,
+                x0=x0,
+                jac=self._neg_profit_gradient,
+                method=self.solver_method,
+                bounds=self._bounds,
+                constraints=self._scipy_constraints,
+                options=options,
+            )
+        except KeyError as exc:
+            # scipy SLSQP can raise KeyError when the Fortran exit code is not
+            # in its exit_modes dict.  This happens on very large problems where
+            # the internal workspace sizing overflows.  Return a synthetic
+            # failure result so the outer loop can handle it gracefully.
+            from scipy.optimize import OptimizeResult
+            warnings.warn(
+                f"SLSQP returned an unknown exit code ({exc}). "
+                "This usually means the problem is too large for the internal "                "Fortran workspace. Returning failure result for this restart.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
+            result = OptimizeResult(
+                x=x0,
+                fun=self._neg_profit(x0),
+                jac=np.zeros_like(x0),
+                nit=0,
+                nfev=1,
+                njev=0,
+                status=-1,
+                success=False,
+                message=f"SLSQP unknown exit code: {exc}",
+            )
         return result
 
     def _check_feasibility(self, m: np.ndarray, tol: float = 1e-4) -> bool:
