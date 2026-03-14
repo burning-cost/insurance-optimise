@@ -199,7 +199,6 @@ Commercial tools (Akur8, WTW Radar, Earnix) do not expose their optimisation met
 | [insurance-survival](https://github.com/burning-cost/insurance-survival) | Survival-adjusted CLV — use CLV outputs to inform retention constraints rather than setting them arbitrarily |
 | [insurance-causal-policy](https://github.com/burning-cost/insurance-causal-policy) | SDID causal evaluation — after running the optimiser, use this to prove the rate change achieved what it was supposed to |
 | [insurance-monitoring](https://github.com/burning-cost/insurance-monitoring) | Model monitoring — the optimised strategy will degrade as the portfolio drifts; this library catches when it needs refreshing |
-| [rate-optimiser](https://github.com/burning-cost/rate-optimiser) | Factor-level rate change optimisation — this library optimises at the policy level; rate-optimiser adjusts the rating factor structure |
 
 [All Burning Cost libraries →](https://burning-cost.github.io)
 
