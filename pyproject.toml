@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "insurance-optimise"
-version = "0.3.2"
+version = "0.3.3"
 description = "Constrained portfolio rate optimisation for UK personal lines insurance, with FCA ENBP enforcement, demand-linked objectives, and efficient frontier generation"
 readme = "README.md"
 license = { text = "MIT" }

@@ -114,7 +114,10 @@ class LogisticDemand:
     x0:
         Baseline demand probabilities, shape (N,). Values in (0, 1).
     elasticity:
-        Price semi-elasticity d(log x)/dp, shape (N,). Negative.
+        Log-log price elasticity d(log x)/d(log p), shape (N,). Negative.
+        This is the same elasticity concept used by LogLinearDemand — not a
+        semi-elasticity. The conversion to the logistic beta parameter is:
+        beta_i = -elasticity_i / (p0_i * (1 - x0_i)).
     technical_price:
         Technical price (baseline m=1 price), shape (N,).
     """
@@ -132,11 +135,10 @@ class LogisticDemand:
         # Derive logistic parameters from (x0, elasticity, p0)
         # p0 = technical_price (at multiplier m=1)
         p0 = self.tc
-        # d(log x)/dp = -(1-x)*beta (since x = 1/(1+exp(alpha+beta*p)))
-        # Setting equal to elasticity (negative): -(1-x0)*beta = elasticity
+        # elasticity = d(log x)/d(log p) = p * d(log x)/dp = p * (-(1-x)*beta)
+        # At baseline: elasticity = p0 * (-(1-x0)*beta)
         # => beta = -elasticity / (p0 * (1 - x0))  [positive, since elasticity < 0]
         x0_clipped = np.clip(self.x0, 1e-6, 1 - 1e-6)
-        # d(log x)/dp = -(1-x)*beta => beta = -elasticity / (p0 * (1-x0))
         self.beta = -self.elasticity / (p0 * (1.0 - x0_clipped))
         # alpha: x0 = 1/(1+exp(alpha + beta*p0))
         # => alpha = log(1/x0 - 1) - beta * p0

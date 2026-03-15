@@ -28,6 +28,7 @@ per iteration — prohibitively slow for N=10,000.
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -74,13 +75,17 @@ class ConstraintConfig:
     stochastic_lr:
         If True, use Branda (2014) stochastic LR constraint:
         E[LR] + z_alpha * sigma[LR] <= lr_max.
-        Requires claims_variance in the input data.
+        Requires claims_variance in the input data. If claims_variance is not
+        supplied the constraint falls back to deterministic and a warning is
+        raised.
     stochastic_alpha:
         Confidence level for stochastic LR constraint (e.g. 0.90).
         z_alpha = sqrt(alpha / (1 - alpha)) via one-sided Chebyshev.
     cvar_max:
         Maximum allowed CVaR (expected shortfall) on profit across scenarios.
         Only active when scenario mode is used. None = unconstrained.
+        Note: not yet implemented — setting this will raise NotImplementedError
+        at validation time.
     cvar_alpha:
         Tail probability for CVaR constraint (e.g. 0.10 = worst 10%).
     """
@@ -117,6 +122,11 @@ class ConstraintConfig:
                 raise ValueError("retention_min must be in (0, 1)")
         if self.stochastic_alpha <= 0 or self.stochastic_alpha >= 1:
             raise ValueError("stochastic_alpha must be in (0, 1)")
+        if self.cvar_max is not None:
+            raise NotImplementedError(
+                "cvar_max constraint not yet implemented. "
+                "Set cvar_max=None or remove it from ConstraintConfig."
+            )
 
 
 def build_bounds(
@@ -179,7 +189,6 @@ def build_bounds(
     feasible = lb <= ub
     if not np.all(feasible):
         n_infeasible = np.sum(~feasible)
-        import warnings
         warnings.warn(
             f"{n_infeasible} policies have lb > ub after applying constraints. "
             "ENBP may be below technical floor. Clipping lb to ub for these "
@@ -236,6 +245,15 @@ def build_scipy_constraints(
                 config.stochastic_alpha / (1.0 - config.stochastic_alpha)
             )
         else:
+            if config.stochastic_lr and claims_variance is None:
+                warnings.warn(
+                    "stochastic_lr=True but claims_variance is None. "
+                    "Falling back to deterministic LR constraint. "
+                    "Pass claims_variance to build_scipy_constraints (or to "
+                    "PortfolioOptimiser) to enable the stochastic constraint.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             var_c = None
             z_alpha = 0.0
 
@@ -251,8 +269,9 @@ def build_scipy_constraints(
                 lr = claims / max(gwp, 1e-10)
                 if var_c is not None:
                     # Branda: E[LR] + z * sigma[LR] <= lr_max
-                    # sigma[LR] = sqrt(sum(var_c * x^2)) / gwp
-                    sigma_lr = np.sqrt(np.dot(var_c, x**2)) / max(gwp, 1e-10)
+                    # Law of total variance: Var(L) = sum_i x_i * Var(Y_i)
+                    # sigma[LR] = sqrt(sum(var_c * x)) / gwp
+                    sigma_lr = np.sqrt(np.dot(var_c, x)) / max(gwp, 1e-10)
                     lr = lr + z_alpha * sigma_lr
                 return lr_max - lr
 
@@ -268,11 +287,12 @@ def build_scipy_constraints(
                 d_claims = cost * dx
                 d_gwp = tc * x + p * dx
                 d_lr = (d_claims * gwp - claims * d_gwp) / gwp**2
-                if var_c is not None and np.dot(var_c, x**2) > 0:
-                    sigma_lr = np.sqrt(np.dot(var_c, x**2)) / gwp
-                    # d(sigma)/d(m_i) = [var_c_i * x_i * dx_i / sigma_num - sigma_num/gwp * d_gwp_i] / gwp
-                    sigma_num = np.sqrt(np.dot(var_c, x**2))
-                    d_sigma_num = var_c * x * dx / sigma_num
+                if var_c is not None and np.dot(var_c, x) > 0:
+                    # sigma_num = sqrt(sum(var_c * x))
+                    # d(sigma_num)/d(m_i) = var_c_i * dx_i / (2 * sigma_num)
+                    # d(sigma)/d(m_i) = [d_sigma_num * gwp - sigma_num * d_gwp_i] / gwp^2
+                    sigma_num = np.sqrt(np.dot(var_c, x))
+                    d_sigma_num = var_c * dx / (2 * sigma_num)
                     d_sigma = (d_sigma_num * gwp - sigma_num * d_gwp) / gwp**2
                     d_lr = d_lr + z_alpha * d_sigma
                 # constraint is lr_max - lr so jac = -d_lr

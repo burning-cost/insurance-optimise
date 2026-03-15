@@ -13,6 +13,8 @@ Tests verify:
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -56,6 +58,15 @@ class TestConstraintConfig:
     def test_invalid_stochastic_alpha_raises(self):
         with pytest.raises(ValueError, match="stochastic_alpha"):
             ConstraintConfig(stochastic_alpha=1.1).validate()
+
+    def test_cvar_max_raises_not_implemented(self):
+        """P1-1: cvar_max is documented but not implemented; validate() must raise."""
+        with pytest.raises(NotImplementedError, match="cvar_max"):
+            ConstraintConfig(cvar_max=50000.0).validate()
+
+    def test_cvar_max_none_does_not_raise(self):
+        """cvar_max=None (default) should pass validation without error."""
+        ConstraintConfig(cvar_max=None).validate()  # should not raise
 
 
 class TestBuildBounds:
@@ -306,3 +317,92 @@ class TestBuildScipyConstraints:
         assert val_stoch <= val_det + 1e-6, (
             f"Stochastic ({val_stoch:.4f}) should be <= deterministic ({val_det:.4f})"
         )
+
+    def test_stochastic_lr_sigma_formula_known_values(self):
+        """
+        P0 regression: sigma[LR] = sqrt(sum(var_c * x)) / gwp, not sqrt(sum(var_c * x^2)).
+
+        With uniform x=x0 (at m=1), known var_c, tc, cost, we can verify
+        the exact sigma value produced by the constraint function.
+        """
+        n = 4
+        # Uniform portfolio: every policy identical
+        tc = np.full(n, 500.0)
+        cost = np.full(n, 300.0)   # 60% LR
+        x0 = np.full(n, 0.8)
+        var_c = np.full(n, 10000.0)
+        demand = LogLinearDemand(x0=x0, elasticity=np.full(n, -1.5))
+
+        z_alpha = np.sqrt(0.90 / 0.10)  # stochastic_alpha=0.90
+
+        config = ConstraintConfig(lr_max=1.0, stochastic_lr=True, stochastic_alpha=0.90)
+        cons = build_scipy_constraints(config, tc, cost, renewal_flag=None,
+                                       demand_model=demand, claims_variance=var_c)
+
+        m = np.ones(n)
+        x = demand.demand(m)  # = x0 = 0.8 each
+        gwp = np.dot(m * tc, x)
+        claims = np.dot(cost, x)
+        lr_det = claims / gwp
+
+        # Correct formula: sigma = sqrt(sum(var_c * x)) / gwp
+        sigma_correct = np.sqrt(np.dot(var_c, x)) / gwp
+        # Wrong formula would be: sigma_wrong = sqrt(sum(var_c * x**2)) / gwp
+        sigma_wrong = np.sqrt(np.dot(var_c, x**2)) / gwp
+
+        # The constraint function returns lr_max - (lr_det + z * sigma)
+        val = cons[0]["fun"](m)
+        expected_val = 1.0 - (lr_det + z_alpha * sigma_correct)
+
+        np.testing.assert_allclose(val, expected_val, rtol=1e-9,
+                                   err_msg="sigma formula uses x, not x^2")
+
+        # Confirm the wrong formula would give a different (larger z*sigma) answer
+        wrong_val = 1.0 - (lr_det + z_alpha * sigma_wrong)
+        assert abs(wrong_val - val) > 1e-6, (
+            "Correct and wrong sigma formulas should differ for non-trivial variance"
+        )
+
+    def test_stochastic_lr_jacobian_with_variance(self):
+        """Analytical Jacobian for stochastic LR constraint matches FD (P0 fix)."""
+        n = 6
+        tc, cost, renewal, demand = self._setup(n, seed=42)
+        var_c = np.ones(n) * 5000.0
+        config = ConstraintConfig(lr_max=0.80, stochastic_lr=True, stochastic_alpha=0.90)
+        cons = build_scipy_constraints(config, tc, cost, renewal, demand,
+                                       claims_variance=var_c)
+        con = cons[0]
+        rng = np.random.default_rng(77)
+        m = rng.uniform(0.9, 1.2, size=n)
+
+        analytical = con["jac"](m)
+        eps = 1e-7
+        fd = np.zeros(n)
+        for i in range(n):
+            m_p = m.copy(); m_p[i] += eps
+            m_m = m.copy(); m_m[i] -= eps
+            fd[i] = (con["fun"](m_p) - con["fun"](m_m)) / (2 * eps)
+
+        np.testing.assert_allclose(analytical, fd, rtol=1e-4, atol=1e-8,
+                                   err_msg="Stochastic LR Jacobian should match FD")
+
+    def test_stochastic_lr_none_variance_warns(self):
+        """P1-2: stochastic_lr=True with no claims_variance must warn and fall back."""
+        n = 5
+        tc = np.ones(n) * 500
+        cost = np.ones(n) * 300
+        renewal = np.zeros(n, dtype=bool)
+        demand = LogLinearDemand(x0=np.full(n, 0.8), elasticity=np.full(n, -1.5))
+
+        config = ConstraintConfig(lr_max=0.80, stochastic_lr=True, stochastic_alpha=0.90)
+
+        with pytest.warns(UserWarning, match="stochastic_lr=True"):
+            cons = build_scipy_constraints(config, tc, cost, renewal, demand,
+                                           claims_variance=None)
+
+        # After fallback, constraint value should equal the deterministic result
+        config_det = ConstraintConfig(lr_max=0.80)
+        cons_det = build_scipy_constraints(config_det, tc, cost, renewal, demand)
+        m = np.ones(n)
+        np.testing.assert_allclose(cons[0]["fun"](m), cons_det[0]["fun"](m), rtol=1e-9,
+                                   err_msg="Fallback should produce deterministic result")
