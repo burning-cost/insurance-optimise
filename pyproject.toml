@@ -90,6 +90,7 @@ dev = [
 Homepage = "https://github.com/burning-cost/insurance-optimise"
 Repository = "https://github.com/burning-cost/insurance-optimise"
 Issues = "https://github.com/burning-cost/insurance-optimise/issues"
+Documentation = "https://github.com/burning-cost/insurance-optimise#readme"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/insurance_optimise"]
