@@ -638,7 +638,7 @@ wheels = [
 
 [[package]]
 name = "insurance-optimise"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -707,14 +707,14 @@ requires-dist = [
     { name = "matplotlib", marker = "extra == 'plot'", specifier = ">=3.6" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "pandas", specifier = ">=2.0" },
-    { name = "polars", specifier = ">=0.20" },
+    { name = "polars", specifier = ">=1.0" },
     { name = "pyarrow", specifier = ">=23.0.1" },
     { name = "pyarrow", marker = "extra == 'dev'", specifier = ">=12.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "scikit-learn", specifier = ">=1.3" },
     { name = "scipy", specifier = ">=1.10" },
-    { name = "statsmodels", specifier = ">=0.14" },
+    { name = "statsmodels", specifier = ">=0.14.5" },
 ]
 provides-extras = ["catboost", "dml", "causal", "survival", "plot", "all", "dev"]
 
