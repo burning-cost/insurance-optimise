@@ -37,14 +37,30 @@ class LogLinearDemand:
     This model has the desirable property that demand is always positive for
     any positive multiplier — no clipping needed.
 
+    Elasticity parameterisation
+    ---------------------------
+    The ``elasticity`` parameter here is the **arc elasticity** (dimensionless):
+
+        epsilon = d(log x) / d(log m)
+
+    This is the standard price elasticity of demand — the percentage change in
+    demand for a 1% change in the price multiplier. Typical values for UK
+    motor insurance: −1.5 to −3.0. This is the format produced by
+    ``insurance-elasticity``'s ``ElasticityEstimator``.
+
+    Do not confuse this with the semi-elasticity used by LogisticDemand
+    (d(log x)/dp), which has units of 1/currency. The same numerical array
+    passed to both models will produce different demand responses because the
+    parameterisation is different.
+
     Parameters
     ----------
     x0:
         Baseline demand array, shape (N,). Demand at m=1 (current price).
     elasticity:
-        Price elasticity array, shape (N,). Should be negative (higher price
-        -> lower demand). If positive values are passed a warning is issued
-        but values are used as-is.
+        Arc price elasticity d(log x)/d(log m), shape (N,). Dimensionless.
+        Should be negative (higher price -> lower demand). If positive values
+        are passed a warning is issued but values are used as-is.
     """
 
     def __init__(self, x0: np.ndarray, elasticity: np.ndarray) -> None:
@@ -108,6 +124,28 @@ class LogisticDemand:
         alpha_i = log(1/x0_i - 1) - beta_i * p0_i
 
     where p0_i = current premium = tc_i * m0_i (m0=1 at baseline).
+
+    Elasticity parameterisation
+    ---------------------------
+    The ``elasticity`` parameter here is the **log-log price elasticity**:
+
+        epsilon = d(log x) / d(log p)
+
+    where p = m * tc is the absolute premium. This is the same elasticity
+    concept used by LogLinearDemand (d(log x)/d(log m)), and at baseline
+    (m=1) the two are numerically identical: passing the same elasticity
+    array to both models produces comparable demand responses.
+
+    The conversion to the logistic beta parameter is:
+        beta_i = -elasticity_i / (p0_i * (1 - x0_i))
+
+    This comes from: elasticity = p0 * d(log x)/dp at baseline
+                                = p0 * (-(1 - x0) * beta)
+    so beta = -elasticity / (p0 * (1 - x0)).
+
+    Note: the original code comment (and an earlier docstring) incorrectly
+    described this as a semi-elasticity d(log x)/dp. The formula is correct;
+    the old label was wrong.
 
     Parameters
     ----------

@@ -99,7 +99,7 @@ opt = PortfolioOptimiser(
 result = opt.optimise()
 
 print(result)
-# OptimisationResult(converged=True, N=500, profit=..., gwp=..., lr=0.681)
+# OptimisationResult(NOT CONVERGED, N=500, profit=..., gwp=..., lr=0.622)
 
 print(result.profit)         # shorthand alias for result.expected_profit
 
@@ -201,18 +201,21 @@ Commercial tools (Akur8, WTW Radar, Earnix) do not expose their optimisation met
 [Technical model (GLM/GBM)]
         ↓ technical_price, expected_loss_cost
 [insurance-elasticity]
-        ↓ p_demand, elasticity, enbp
+        ↓ p_demand, elasticity
 [insurance-optimise]  ← this library
+        ↑ enbp (new business quote — from rating engine)
         ↓ optimal_multiplier per policy
 [Rating engine / ratebook update]
 ```
 
-## Related libraries
+## Related Libraries
 
-| Library | Why it's relevant |
-|---------|------------------|
-| [insurance-elasticity](https://github.com/burning-cost/insurance-elasticity) | Price elasticity and demand modelling — provides the `p_demand` and `elasticity` inputs this library requires |
+| Library | What it does |
+|---------|-------------|
+| [insurance-elasticity](https://github.com/burning-cost/insurance-elasticity) | Causal price elasticity and demand modelling — provides the `p_demand` and `elasticity` inputs this library requires |
+| [insurance-demand](https://github.com/burning-cost/insurance-demand) | Conversion and retention modelling — demand curves from this library are the primary input to the optimiser |
 | [insurance-survival](https://github.com/burning-cost/insurance-survival) | Survival-adjusted CLV — use CLV outputs to inform retention constraints rather than setting them arbitrarily |
+| [insurance-deploy](https://github.com/burning-cost/insurance-deploy) | Model deployment — optimised rates flow into the champion/challenger deployment framework |
 | [insurance-causal-policy](https://github.com/burning-cost/insurance-causal-policy) | SDID causal evaluation — after running the optimiser, use this to prove the rate change achieved what it was supposed to |
 | [insurance-monitoring](https://github.com/burning-cost/insurance-monitoring) | Model monitoring — the optimised strategy will degrade as the portfolio drifts; this library catches when it needs refreshing |
 
@@ -250,13 +253,7 @@ The benchmark then uses the estimated elasticities to compare revenue per quote 
 - Emms & Haberman (2005): theoretical foundation for demand-linked insurance pricing
 - Spedicato, Dutang & Petrini (2018): ML-then-optimise pipeline in practice
 
-## Related Libraries
 
-| Library | What it does |
-|---------|-------------|
-| [insurance-demand](https://github.com/burning-cost/insurance-demand) | Conversion and retention modelling — demand curves from this library are the primary input to the optimiser |
-| [insurance-elasticity](https://github.com/burning-cost/insurance-elasticity) | Causal price elasticity — elasticity estimates define the demand response surface the optimiser maximises over |
-| [insurance-deploy](https://github.com/burning-cost/insurance-deploy) | Model deployment — optimised rates flow into the champion/challenger deployment framework |
 
 ## Licence
 
