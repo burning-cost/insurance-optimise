@@ -232,19 +232,41 @@ This package consolidates two previously separate libraries:
 
 ## Performance
 
-Benchmarked against **naive logistic regression** (for elasticity estimation) and **flat pricing** (for commercial impact) on synthetic UK motor PCW quote panel — 50,000 quotes, true price elasticity −2.0, confounded assignment (high-risk customers face higher prices and have lower sensitivity). Full notebook: `notebooks/benchmark_demand.py`.
+Benchmarked on synthetic UK motor PCW data — 50,000 quotes, true population-average price elasticity −2.0. Confounding is explicit: high-risk customers face higher prices via the underwriting model and have lower price sensitivity (fewer alternative quotes on PCW). Full script: `notebooks/benchmark_demand.py`.
 
-| Metric | Naive logistic regression | DML ElasticityEstimator | Notes |
-|--------|--------------------------|------------------------|-------|
-| Estimated elasticity | biased (conflates risk and price effects) | near −2.0 | true effect is −2.0 |
-| Absolute bias | substantial (direction: overestimates sensitivity) | near zero | primary metric |
-| 95% CI valid | no | yes | Neyman-orthogonal |
+### Elasticity estimation: DML vs naive logistic regression
 
-The benchmark then uses the estimated elasticities to compare revenue per quote under demand-curve-aware pricing against flat loading across all segments. Segments with heterogeneous elasticities (young drivers vs. mature drivers on PCWs, for example) are systematically mispriced by flat loading — the optimiser captures revenue by pricing to each segment's actual demand curve.
+| Method | Estimate | Absolute bias | Relative bias | 95% CI |
+|--------|----------|---------------|---------------|--------|
+| Naive logistic (price only) | −3.43 | 1.43 | 71.7% | none |
+| Naive logistic (full controls) | −1.21 | 0.79 | 39.6% | none |
+| DML + CatBoost (5-fold PLR) | −4.03 | 2.03 | 101.3% | [−5.65, −2.40] |
 
-**When to use:** New business pricing on price comparison websites where some segments are highly elastic and others are captive. The combination of DML elasticity estimation and constrained optimisation is justified when elasticity varies materially across the book and the ENBP constraint is binding.
+**Honest interpretation:** On this synthetic dataset, the DML estimator did not outperform naive logistic regression on point estimate accuracy — it returned −4.03 vs. the true −2.0, a larger absolute bias than the naive-full-controls logistic. The naive full-controls estimate of −1.21 was closer to truth in absolute terms.
 
-**When NOT to use:** When price is randomly assigned (genuine A/B test) — naive regression is unbiased and DML adds no value. When the book is small or the treatment variation is thin, the DML confidence intervals will be wide and the optimiser will produce near-flat recommendations anyway.
+The DML result is sensitive to the quasi-experimental variation available: in this DGP, the price variation comes from small quarterly loading cycles (std of log_price_ratio = 0.045). With such narrow treatment variation, the DML cross-fitting step partials out most signal along with the confounding. The 95% CI is wide (±1.6) and the sensitivity analysis confirms the estimate is not robust to small amounts of residual confounding (RV = 2.1%).
+
+**When DML adds value:** When there is stronger exogenous price variation — genuine A/B test assignment, policy cycles creating larger treatment spread, or natural experiments in rate changes. With log_price_ratio std ≥ 0.10, the DML estimate converges closer to truth. With std < 0.05, naive-full-controls will often have lower MSE despite having no coverage guarantee.
+
+DML fit time: 13s on 50,000 quotes (5 folds, CatBoost nuisance models).
+
+### Pricing lift vs flat loading
+
+Even with a biased elasticity estimate, demand-curve-aware pricing outperforms flat loading. Using the DML estimate (−4.03) to set prices per segment:
+
+| Segment | Flat loading profit (£/quote) | DML-optimised profit (£/quote) | Lift |
+|---------|------------------------------|-------------------------------|------|
+| Young + High Risk | −31.79 | +14.39 | +145% |
+| Young + Standard Risk | −22.01 | +9.64 | +144% |
+| Mid-age + Standard Risk | −12.21 | +5.31 | +144% |
+| Mid-age + Low Risk | −10.06 | +4.46 | +144% |
+| Senior + Low Risk | −11.60 | +4.87 | +142% |
+
+Mean profit lift across segments: **+143.8%**. Negative flat-loading profit per quote reflects that a 10% loading is not enough to cover expected losses at market conversion rates — the optimiser finds a loss-minimising price given the demand curve. Gap vs oracle pricing (true elasticity): 78%.
+
+**When to use:** New business pricing on PCWs where flat loadings are the current practice. The demand-curve optimiser captures value even with imprecise elasticity estimates, because the shape of the demand curve constrains the price in the right direction. The benefit is largest when elasticity varies materially across segments (young vs. mature drivers).
+
+**When NOT to use:** When the book has no genuine price variation for estimation. When regulatory constraints bind so tightly that the optimiser has no degrees of freedom. When you need to demonstrate the pricing model to FCA — see the audit trail documentation.
 
 ## References
 
