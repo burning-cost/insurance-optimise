@@ -5,6 +5,8 @@
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-BSD--3-blue)]()
 
+> 💬 Questions or feedback? Start a [Discussion](https://github.com/burning-cost/insurance-optimise/discussions). Found it useful? A ⭐ helps others find it.
+
 **Flat loading on a price comparison website leaves money in every segment where your elasticity varies. This library finds the right multiplier for each risk.**
 
 You have a pricing model. It tells you the right technical price for each risk. But "technically correct" isn't the only constraint. You also have:
