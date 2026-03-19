@@ -11,8 +11,8 @@
 
 You have a pricing model. It tells you the right technical price for each risk. But "technically correct" isn't the only constraint. You also have:
 
-- FCA PS21/11: renewal premiums cannot exceed what a new customer would be quoted (ENBP)
-- Consumer Duty: you need to demonstrate fair value, not just set prices actuarially
+- FCA PS21/5 (ENBP): renewal premiums cannot exceed what a new customer would be quoted — this is a hard per-policy pricing ceiling
+- Consumer Duty (PS22/9): a principles-based governance obligation to demonstrate fair value across customer outcomes — distinct from ENBP and not a per-policy pricing ceiling
 - A target loss ratio you're trying to hit
 - A retention floor you can't fall below without the underwriting team getting anxious
 - Rate-change limits — you can't shock customers with 40% increases even if the model says so
@@ -43,7 +43,7 @@ Segments with heterogeneous elasticities (young drivers vs mature drivers on PCW
 ## What it does
 
 - Maximise expected profit (or minimise combined ratio) subject to any combination of:
-  - **ENBP** constraint — FCA PS21/11 hard ceiling per renewal policy
+  - **ENBP** constraint — FCA PS21/5 hard ceiling per renewal policy
   - **Loss ratio** bounds (deterministic or Branda 2014 stochastic formulation)
   - **Volume retention** floor
   - **GWP** bounds
@@ -77,7 +77,7 @@ expected_loss_cost = technical_price * rng.uniform(0.55, 0.75, n)  # expected cl
 p_renewal         = rng.uniform(0.70, 0.95, n)          # renewal probability at current price
 price_elasticity  = rng.uniform(-2.5, -0.8, n)          # from insurance-elasticity
 is_renewal        = rng.choice([True, False], n, p=[0.7, 0.3])
-# ENBP: FCA PS21/11 — renewal premium cannot exceed new business quote
+# ENBP: FCA PS21/5 — renewal premium cannot exceed new business quote
 enbp              = technical_price * rng.uniform(1.05, 1.25, n)  # must exceed technical_price
 
 config = ConstraintConfig(
@@ -177,6 +177,8 @@ Two built-in demand models:
 
 Constant price elasticity. Works well with outputs from `insurance-elasticity`. Demand is always positive. Gradient is analytic and fast.
 
+> **Valid range:** Appropriate for price changes in the ±10–15% range typical of UK personal lines annual renewals. Extrapolation beyond ±20% produces unrealistically large demand responses given the constant-elasticity assumption.
+
 **Logistic:** `x(m) = sigmoid(alpha + beta * m * tc)`
 
 Demand is bounded in (0,1). More appropriate for renewal probabilities when you want them to stay interpretable as probabilities. Requires conversion from elasticity estimate to logistic parameters.
@@ -191,7 +193,7 @@ For N > 5,000, consider segment aggregation before optimising.
 
 ## Regulatory context
 
-Under FCA Consumer Duty (effective July 2023), firms must demonstrate that pricing practices deliver fair value. Under PS21/11, renewal premiums must not exceed the ENBP — this is not a soft target, it is enforceable.
+ENBP (PS21/5) and Consumer Duty (PS22/9) are distinct obligations. ENBP is a hard per-policy pricing ceiling: renewal premiums must not exceed the equivalent new business price. Consumer Duty is a principles-based governance obligation requiring firms to demonstrate fair value across customer outcomes — it does not set a per-policy price ceiling but requires documented governance of pricing practices.
 
 This library enforces ENBP at the code level. The JSON audit trail records the constraint configuration, the solution, and whether ENBP was binding for each renewal policy. You can show this to the FCA.
 
@@ -272,7 +274,7 @@ Mean profit lift across segments: **+143.8%**. Negative flat-loading profit per 
 
 ## References
 
-- FCA PS21/11 (ENBP): https://www.fca.org.uk/publication/policy/ps21-11.pdf
+- FCA PS21/5 (ENBP): https://www.fca.org.uk/publication/policy/ps21-5.pdf
 - Branda (2014): stochastic LR constraint via one-sided Chebyshev inequality
 - Emms & Haberman (2005): theoretical foundation for demand-linked insurance pricing
 - Spedicato, Dutang & Petrini (2018): ML-then-optimise pipeline in practice
