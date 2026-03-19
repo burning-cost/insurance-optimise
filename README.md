@@ -55,7 +55,7 @@ Segments with heterogeneous elasticities (young drivers vs mature drivers on PCW
 - Scenario mode — run under pessimistic/central/optimistic elasticity assumptions
 - JSON audit trail — every run produces evidence of ENBP enforcement for FCA scrutiny
 
-## Install
+## Installation
 
 ```bash
 pip install insurance-optimise
