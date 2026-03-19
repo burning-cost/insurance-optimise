@@ -84,13 +84,14 @@ dev = [
     "pytest-cov>=4.0",
     "matplotlib>=3.6",
     "pyarrow>=12.0",
+    "pdoc>=14.0.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/burning-cost/insurance-optimise"
 Repository = "https://github.com/burning-cost/insurance-optimise"
 Issues = "https://github.com/burning-cost/insurance-optimise/issues"
-Documentation = "https://github.com/burning-cost/insurance-optimise#readme"
+Documentation = "https://burning-cost.github.io/insurance-optimise/"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/insurance_optimise"]
