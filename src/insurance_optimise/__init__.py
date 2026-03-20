@@ -130,7 +130,7 @@ from insurance_optimise.scenarios import ScenarioObjective
 from insurance_optimise.stochastic import ClaimsVarianceModel
 from insurance_optimise import demand
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 __all__ = [
     "PortfolioOptimiser",
