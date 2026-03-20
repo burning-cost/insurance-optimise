@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "insurance-optimise"
-version = "0.3.4"
-description = "Constrained portfolio rate optimisation for UK personal lines insurance, with FCA ENBP enforcement, demand-linked objectives, and efficient frontier generation"
+version = "0.4.0"
+description = "Constrained portfolio rate optimisation for UK personal lines insurance, with FCA ENBP enforcement, demand-linked objectives, efficient frontier, 3-objective Pareto surface with fairness, and model quality LR adjustment"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
@@ -30,6 +30,10 @@ keywords = [
     "causal inference",
     "GIPP",
     "PS21/11",
+    "pareto",
+    "fairness",
+    "multi-objective",
+    "model quality",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -72,12 +76,20 @@ survival = [
 plot = [
     "matplotlib>=3.6",
 ]
+parallel = [
+    "joblib>=1.2",
+]
+pareto = [
+    "joblib>=1.2",
+    "matplotlib>=3.6",
+]
 all = [
     "catboost>=1.2",
     "doubleml>=0.7",
     "econml>=0.15",
     "lifelines>=0.27",
     "matplotlib>=3.6",
+    "joblib>=1.2",
 ]
 dev = [
     "pytest>=7.0",

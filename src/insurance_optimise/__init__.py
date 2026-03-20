@@ -5,7 +5,8 @@ Solves the insurance pricing optimisation problem:
 - Maximise expected profit subject to FCA regulatory constraints
 - Handles ENBP (PS21/11), loss ratio bounds, volume retention, rate change limits
 - Analytical gradients for SLSQP — fast enough for N=10,000 policies
-- Efficient frontier via epsilon-constraint sweep
+- Efficient frontier via epsilon-constraint sweep (bi-objective)
+- 3-objective Pareto surface via 2D epsilon-constraint grid (ParetoFrontier)
 - JSON audit trail for FCA regulatory evidence
 
 The ``demand`` subpackage (``insurance_optimise.demand``) is the full demand
@@ -76,9 +77,33 @@ at the given Pearson correlation rho:
 ...     model_cv_lambda=1.2,
 ... )
 
+3-objective Pareto surface
+--------------------------
+>>> from functools import partial
+>>> from insurance_optimise.pareto import ParetoFrontier, premium_disparity_ratio
+>>> fairness_fn = partial(
+...     premium_disparity_ratio,
+...     technical_price=tc,
+...     group_labels=deprivation_quintile,
+... )
+>>> pf = ParetoFrontier(
+...     optimiser=opt,
+...     fairness_metric=fairness_fn,
+...     sweep_x='volume_retention',
+...     sweep_x_range=(0.80, 0.98),
+...     sweep_y='fairness_max',
+...     sweep_y_range=(1.05, 2.00),
+...     n_points_x=10,
+...     n_points_y=10,
+... )
+>>> result = pf.run()
+>>> result = result.select(method='topsis', weights=(0.5, 0.3, 0.2))
+>>> print(result.selected)
+
 References
 ----------
 - FCA PS21/11 (ENBP constraint): https://www.fca.org.uk/publication/policy/ps21-11.pdf
+- FCA PS22/9 (Consumer Duty): fairness outcomes across customer segments
 - Branda (2014): stochastic LR constraint via Chebyshev
 - Emms & Haberman (2005): theoretical foundation for demand-linked pricing
 - Hedges (2025): model quality and loss ratio; arXiv:2512.03242
@@ -89,6 +114,12 @@ from insurance_optimise._demand_model import LogLinearDemand, LogisticDemand, ma
 from insurance_optimise.frontier import EfficientFrontier
 from insurance_optimise.model_quality import ModelQualityReport, model_quality_report
 from insurance_optimise.optimiser import PortfolioOptimiser
+from insurance_optimise.pareto import (
+    ParetoFrontier,
+    ParetoResult,
+    premium_disparity_ratio,
+    loss_ratio_disparity,
+)
 from insurance_optimise.result import (
     EfficientFrontierResult,
     FrontierPoint,
@@ -99,7 +130,7 @@ from insurance_optimise.scenarios import ScenarioObjective
 from insurance_optimise.stochastic import ClaimsVarianceModel
 from insurance_optimise import demand
 
-__version__ = "0.3.4"
+__version__ = "0.4.0"
 
 __all__ = [
     "PortfolioOptimiser",
@@ -109,6 +140,10 @@ __all__ = [
     "EfficientFrontier",
     "EfficientFrontierResult",
     "FrontierPoint",
+    "ParetoFrontier",
+    "ParetoResult",
+    "premium_disparity_ratio",
+    "loss_ratio_disparity",
     "LogLinearDemand",
     "LogisticDemand",
     "make_demand_model",

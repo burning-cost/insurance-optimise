@@ -638,7 +638,7 @@ wheels = [
 
 [[package]]
 name = "insurance-optimise"
-version = "0.3.0"
+version = "0.4.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -658,6 +658,7 @@ all = [
     { name = "catboost" },
     { name = "doubleml" },
     { name = "econml" },
+    { name = "joblib" },
     { name = "lifelines" },
     { name = "matplotlib" },
 ]
@@ -677,6 +678,13 @@ dev = [
 dml = [
     { name = "catboost" },
     { name = "doubleml" },
+]
+parallel = [
+    { name = "joblib" },
+]
+pareto = [
+    { name = "joblib" },
+    { name = "matplotlib" },
 ]
 plot = [
     { name = "matplotlib" },
@@ -700,10 +708,14 @@ requires-dist = [
     { name = "doubleml", marker = "extra == 'dml'", specifier = ">=0.7" },
     { name = "econml", marker = "extra == 'all'", specifier = ">=0.15" },
     { name = "econml", marker = "extra == 'causal'", specifier = ">=0.15" },
+    { name = "joblib", marker = "extra == 'all'", specifier = ">=1.2" },
+    { name = "joblib", marker = "extra == 'parallel'", specifier = ">=1.2" },
+    { name = "joblib", marker = "extra == 'pareto'", specifier = ">=1.2" },
     { name = "lifelines", marker = "extra == 'all'", specifier = ">=0.27" },
     { name = "lifelines", marker = "extra == 'survival'", specifier = ">=0.27" },
     { name = "matplotlib", marker = "extra == 'all'", specifier = ">=3.6" },
     { name = "matplotlib", marker = "extra == 'dev'", specifier = ">=3.6" },
+    { name = "matplotlib", marker = "extra == 'pareto'", specifier = ">=3.6" },
     { name = "matplotlib", marker = "extra == 'plot'", specifier = ">=3.6" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "pandas", specifier = ">=2.0" },
@@ -716,7 +728,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.10" },
     { name = "statsmodels", specifier = ">=0.14.5" },
 ]
-provides-extras = ["catboost", "dml", "causal", "survival", "plot", "all", "dev"]
+provides-extras = ["catboost", "dml", "causal", "survival", "plot", "parallel", "pareto", "all", "dev"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.0.2" }]
