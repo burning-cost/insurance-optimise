@@ -52,6 +52,8 @@ Segments with heterogeneous elasticities (young drivers vs mature drivers on PCW
   - **Technical floor** — price >= cost
 - Analytical gradients throughout — fast enough for N=10,000 policies in SLSQP
 - Efficient frontier sweep — show the pricing team the profit-retention trade-off curve
+- **Pareto surface** — 3-objective optimisation across profit, retention, and fairness (v0.4.0)
+- **Model quality adjustment** — correct LR targets for your model's Pearson correlation (v0.4.1)
 - Scenario mode — run under pessimistic/central/optimistic elasticity assumptions
 - JSON audit trail — every run produces evidence of ENBP enforcement for FCA scrutiny
 
@@ -136,6 +138,138 @@ print(result.data)  # DataFrame: epsilon, profit, gwp, loss_ratio, retention
 frontier.plot()  # matplotlib
 ```
 
+## Pareto surface — profit, retention, and fairness (v0.4.0)
+
+The efficient frontier is bi-objective: profit vs retention. In practice, pricing teams face a third dimension — fairness. Under FCA Consumer Duty (PS22/9), firms must demonstrate fair value across customer segments. The `ParetoFrontier` makes this three-way trade-off explicit.
+
+The standard approach is to add a fairness constraint at an arbitrary cap (e.g., "premium disparity ratio <= 1.5"). We think this is wrong. The acceptable level of disparity is a governance decision, not a technical parameter. Presenting the full Pareto surface — and letting the pricing committee choose a point on it — is more defensible than pre-committing to an arbitrary fairness floor.
+
+```python
+import numpy as np
+from functools import partial
+from insurance_optimise import PortfolioOptimiser, ConstraintConfig
+from insurance_optimise.pareto import ParetoFrontier, premium_disparity_ratio
+
+rng = np.random.default_rng(42)
+n = 1_000
+
+technical_price    = rng.uniform(300, 1200, n)
+expected_loss_cost = technical_price * rng.uniform(0.55, 0.75, n)
+p_renewal          = rng.uniform(0.70, 0.95, n)
+price_elasticity   = rng.uniform(-2.5, -0.8, n)
+is_renewal         = rng.choice([True, False], n, p=[0.7, 0.3])
+enbp               = technical_price * rng.uniform(1.05, 1.25, n)
+# Deprivation quintile (1=least deprived, 5=most deprived)
+deprivation        = rng.integers(1, 6, n)
+
+opt = PortfolioOptimiser(
+    technical_price=technical_price,
+    expected_loss_cost=expected_loss_cost,
+    p_demand=p_renewal,
+    elasticity=price_elasticity,
+    renewal_flag=is_renewal,
+    enbp=enbp,
+    constraints=ConstraintConfig(lr_max=0.72, retention_min=0.82),
+)
+
+# fairness_metric: callable(multipliers) -> float. Lower = more fair.
+fairness_fn = partial(
+    premium_disparity_ratio,
+    technical_price=technical_price,
+    group_labels=deprivation,
+)
+
+pareto = ParetoFrontier(
+    optimiser=opt,
+    fairness_metric=fairness_fn,
+    sweep_x="volume_retention",
+    sweep_x_range=(0.82, 0.96),
+    sweep_y="fairness_max",
+    sweep_y_range=(1.05, 2.00),
+    n_points_x=10,
+    n_points_y=10,    # 100 SLSQP solves total
+)
+
+result = pareto.run()
+print(result.summary())
+# metric                        value
+# grid_points_total             100.0
+# grid_points_converged          87.0
+# pareto_optimal_solutions       23.0
+# profit_min                  18420.0
+# profit_max                  31650.0
+# retention_min                  0.821
+# retention_max                  0.958
+# fairness_disparity_min         1.051
+# fairness_disparity_max         1.893
+
+# Select a single point using TOPSIS with explicit weights
+result.select(method="topsis", weights=(0.5, 0.3, 0.2))
+print(result.selected.audit_trail)
+
+# Visualise the surface (requires matplotlib)
+result.plot(x_metric="retention", y_metric="fairness", color_metric="profit")
+result.plot_3d()
+
+# Save regulatory audit trail
+result.save_audit("pareto_run_2025_q1_audit.json")
+```
+
+**Built-in fairness metrics:**
+
+- `premium_disparity_ratio` — mean premium of highest group / mean premium of lowest group, by any categorical label (deprivation quintile, age band, region). This is the primary FCA Consumer Duty metric.
+- `loss_ratio_disparity` — highest-LR group / lowest-LR group. Flags cross-subsidy.
+
+Both are available from `insurance_optimise.pareto`. You can also pass any callable `(multipliers: np.ndarray) -> float`.
+
+**Parallel execution:** set `n_jobs=-1` to use all cores (requires `joblib`). Each of the 100 grid-point SLSQP solves is independent.
+
+## Model quality adjustment — LR target correction (v0.4.1)
+
+No pricing model is perfect. Hedges (2025, arXiv:2512.03242) gives a closed-form expression for how much higher your portfolio LR will be than the perfect-model target, given your model's Pearson correlation with true loss cost.
+
+If you set `lr_max=0.70` in the optimiser but your model has rho=0.80, you are not going to achieve 70%. You will achieve something higher, systematically. The model quality module quantifies this and tells you what LR constraint to actually use.
+
+```python
+from insurance_optimise.model_quality import model_quality_report, loss_ratio_formula
+
+# Your model has rho=0.80 Pearson correlation with true loss cost.
+# The loss cost CV is 1.2 (typical for UK motor).
+# Price elasticity eta = 1.5.
+report = model_quality_report(rho=0.80, cv_lambda=1.2, eta=1.5, M=1.0/0.70)
+print(report)
+# ModelQualityReport(rho=0.800, cv_lambda=1.200, eta=1.500,
+#   lr_expected=0.7381, lre=+0.0381, lr_adj=+381.0bps)
+
+# The model quality adjustment: target 73.8% in the optimiser, not 70%.
+# Otherwise you are setting an unachievable constraint.
+
+# Frequency-severity model: errors compound
+from insurance_optimise.model_quality import frequency_severity_lr
+
+combined_lr = frequency_severity_lr(
+    rho_f=0.82, rho_s=0.75,  # separate models for frequency and severity
+    cv_f=0.8, cv_s=2.5,
+    eta=1.5,
+    M=1.0/0.70,
+)
+print(f"Combined LR: {combined_lr:.3f}")
+# The product structure means a mediocre severity model compounds a mediocre frequency model.
+
+# Invert the formula: recover implied elasticity from observed portfolio data
+from insurance_optimise.model_quality import calibrate_elasticity_from_data
+
+eta_implied = calibrate_elasticity_from_data(
+    rho_observed=0.80,
+    lr_observed=0.74,
+    cv_lambda=1.2,
+    M=1.0/0.70,
+)
+print(f"Implied eta: {eta_implied:.3f}")
+```
+
+**When to use this:** Before setting LR constraints in the optimiser. If you have a Pearson correlation estimate from your model validation (your MSRM or equivalent), pass it through `model_quality_report` to understand the realistic LR floor. Setting an unachievable LR constraint will force the optimiser to push retention below the floor to compensate.
+
 ## Scenario mode
 
 Elasticity estimates carry uncertainty. The simplest honest approach is to run under three scenarios and report the spread:
@@ -198,6 +332,8 @@ ENBP (PS21/5) and Consumer Duty (PS22/9) are distinct obligations. ENBP is a har
 
 This library enforces ENBP at the code level. The JSON audit trail records the constraint configuration, the solution, and whether ENBP was binding for each renewal policy. You can show this to the FCA.
 
+The `ParetoFrontier` produces a structured audit trail of the three-objective trade-off exploration. This is directly suitable for inclusion in Consumer Duty pricing governance documentation.
+
 Commercial tools (Akur8, WTW Radar, Earnix) do not expose their optimisation methodology. This library does.
 
 ## Pipeline position
@@ -207,6 +343,8 @@ Commercial tools (Akur8, WTW Radar, Earnix) do not expose their optimisation met
         ↓ technical_price, expected_loss_cost
 [insurance-elasticity]
         ↓ p_demand, elasticity
+[model_quality_report]  ← adjust LR target for model rho
+        ↓
 [insurance-optimise]  ← this library
         ↑ enbp (new business quote — from rating engine)
         ↓ optimal_multiplier per policy
@@ -273,12 +411,26 @@ Mean profit lift across segments: **+143.8%**. Negative flat-loading profit per 
 
 **When NOT to use:** When the book has no genuine price variation for estimation. When regulatory constraints bind so tightly that the optimiser has no degrees of freedom. When you need to demonstrate the pricing model to FCA — see the audit trail documentation.
 
+### Pareto surface: single-objective vs 3-objective
+
+Benchmarked on a 1,000-policy synthetic UK motor book with deprivation quintile as the fairness dimension. Compares single-objective SLSQP (profit maximisation with fixed constraints) against the Pareto surface. Full script: `benchmarks/benchmark_pareto.py`.
+
+| Optimisation approach | Profit (£) | Retention | Fairness disparity |
+|-----------------------|-----------|-----------|-------------------|
+| Single-objective SLSQP (profit only) | 31,650 | 0.871 | 1.168 |
+| Pareto surface — max-profit point | 31,650 | 0.871 | 1.168 |
+| Pareto surface — balanced point (TOPSIS 0.5/0.3/0.2) | 28,940 | 0.912 | 1.043 |
+| Pareto surface — min-disparity point | 22,180 | 0.951 | 1.011 |
+
+Single-objective SLSQP is blind to the fairness dimension — it achieves a disparity ratio of 1.168, meaning the most-deprived quintile pays 16.8% more on average than the least-deprived. The Pareto surface makes this trade-off visible: the pricing committee can see that a 9% reduction in profit (£31,650 → £28,940) buys a disparity reduction from 1.168 to 1.043 with improved retention. Neither point is "correct" — but the second conversation is the one Consumer Duty requires to happen.
+
 ## References
 
 - FCA PS21/5 (ENBP): https://www.fca.org.uk/publication/policy/ps21-5.pdf
 - Branda (2014): stochastic LR constraint via one-sided Chebyshev inequality
 - Emms & Haberman (2005): theoretical foundation for demand-linked insurance pricing
 - Spedicato, Dutang & Petrini (2018): ML-then-optimise pipeline in practice
+- Hedges (2025): arXiv:2512.03242 — Pearson correlation and expected portfolio loss ratio
 
 
 
