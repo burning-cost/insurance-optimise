@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 import polars as pl
@@ -62,6 +62,14 @@ class OptimisationResult:
         Per-policy output as a Polars DataFrame. Columns: policy_idx,
         multiplier, new_premium, expected_demand, contribution,
         enbp_binding, rate_change_pct.
+    model_lre:
+        Loss ratio error from Hedges (2025) model quality adjustment.
+        Populated when ConstraintConfig.model_quality_adjusted_lr=True.
+        None otherwise.
+    lr_constraint_used:
+        The effective lr_max used in the solver after any model quality
+        adjustment. Equal to config.lr_max when no adjustment is applied.
+        None when lr_max is not constrained.
     """
 
     multipliers: np.ndarray
@@ -77,6 +85,9 @@ class OptimisationResult:
     n_iter: int
     audit_trail: dict[str, Any]
     summary_df: pl.DataFrame
+    # Optional model quality fields (Hedges 2025)
+    model_lre: float | None = field(default=None)
+    lr_constraint_used: float | None = field(default=None)
 
     @property
     def profit(self) -> float:

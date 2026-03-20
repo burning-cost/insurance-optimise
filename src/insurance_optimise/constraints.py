@@ -88,6 +88,25 @@ class ConstraintConfig:
         at validation time.
     cvar_alpha:
         Tail probability for CVaR constraint (e.g. 0.10 = worst 10%).
+    model_quality_adjusted_lr:
+        If True, adjust lr_max upward by the Hedges (2025) loss ratio error
+        to account for model imperfection. The effective lr_max passed to the
+        solver becomes lr_max * (1 + E_LR), where E_LR is the expected loss
+        ratio error at model_rho. This is the recommended approach: target
+        a realistic LR given your model's actual predictive power, not an
+        idealistic perfect-model benchmark. Requires model_rho to be set.
+    model_rho:
+        Pearson correlation of the pricing model with true loss cost, in (0,1].
+        Required when model_quality_adjusted_lr=True. Typical values:
+        - 0.70: weak model (telematics-naive, few risk factors)
+        - 0.80: reasonable GLM
+        - 0.90: strong model (rich features, good credibility)
+        - 0.95+: excellent model (large data, gradient boosting, telematics)
+    model_cv_lambda:
+        Coefficient of variation of the loss cost distribution. If None and
+        model_quality_adjusted_lr=True, estimated from expected_loss_cost
+        at constraint-build time (with a warning, as this underestimates the
+        true CV). Supply this explicitly for reliable adjustment.
     """
 
     lr_max: float | None = None
@@ -104,6 +123,10 @@ class ConstraintConfig:
     stochastic_alpha: float = 0.90
     cvar_max: float | None = None
     cvar_alpha: float = 0.10
+    # Model quality adjustment (Hedges 2025)
+    model_quality_adjusted_lr: bool = False
+    model_rho: float | None = None
+    model_cv_lambda: float | None = None
 
     def validate(self) -> None:
         """Raise ValueError if the configuration is internally inconsistent."""
@@ -126,6 +149,12 @@ class ConstraintConfig:
             raise NotImplementedError(
                 "cvar_max constraint not yet implemented. "
                 "Set cvar_max=None or remove it from ConstraintConfig."
+            )
+        if self.model_quality_adjusted_lr and self.model_rho is None:
+            raise ValueError(
+                "model_quality_adjusted_lr=True requires model_rho to be set. "
+                "Supply the Pearson correlation of your pricing model, e.g. "
+                "model_rho=0.85."
             )
 
 
@@ -214,6 +243,15 @@ def build_scipy_constraints(
     Returns a list of dicts, each with 'type', 'fun', and 'jac'.
     Only active constraints (where the config value is set) are included.
 
+    When ``config.model_quality_adjusted_lr=True``, the effective lr_max is
+    adjusted upward by the Hedges (2025) loss ratio error. This relaxes the
+    constraint to account for the fact that an imperfect model cannot achieve
+    the same LR as a perfect one. The adjustment is:
+
+        lr_max_effective = lr_max * (1 + E_LR)
+
+    where E_LR = loss_ratio_formula(rho, cv, eta, M=1) - 1.0.
+
     Parameters
     ----------
     config:
@@ -233,6 +271,8 @@ def build_scipy_constraints(
     -------
     list of scipy constraint dicts
     """
+    from insurance_optimise.model_quality import loss_ratio_error, _estimate_cv
+
     tc = np.asarray(technical_price, dtype=float)
     cost = np.asarray(expected_loss_cost, dtype=float)
     constraints = []
@@ -260,7 +300,32 @@ def build_scipy_constraints(
         if config.lr_max is not None:
             lr_max = config.lr_max
 
-            def _lr_upper_fun(m: np.ndarray) -> float:
+            # Apply model quality adjustment if requested
+            if config.model_quality_adjusted_lr and config.model_rho is not None:
+                cv_lambda = config.model_cv_lambda
+                if cv_lambda is None:
+                    cv_lambda = _estimate_cv(cost)
+
+                # Use median elasticity = 1.0 as a neutral default; the
+                # adjustment direction is robust to this choice
+                _eta_default = 1.0
+                e_lr = loss_ratio_error(
+                    config.model_rho,
+                    cv_lambda,
+                    _eta_default,
+                )
+                lr_max_effective = lr_max * (1.0 + e_lr)
+                warnings.warn(
+                    f"Model quality LR adjustment applied: "
+                    f"rho={config.model_rho:.3f}, cv_lambda={cv_lambda:.3f}, "
+                    f"E_LR={e_lr:+.4f} ({e_lr*10000:+.1f}bps). "
+                    f"lr_max adjusted from {lr_max:.4f} to {lr_max_effective:.4f}.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+                lr_max = lr_max_effective
+
+            def _lr_upper_fun(m: np.ndarray, _lr_max: float = lr_max) -> float:
                 # ineq: LR_max - LR(m) >= 0
                 x = demand_model.demand(m)
                 p = m * tc
@@ -273,7 +338,7 @@ def build_scipy_constraints(
                     # sigma[LR] = sqrt(sum(var_c * x)) / gwp
                     sigma_lr = np.sqrt(np.dot(var_c, x)) / max(gwp, 1e-10)
                     lr = lr + z_alpha * sigma_lr
-                return lr_max - lr
+                return _lr_max - lr
 
             def _lr_upper_jac(m: np.ndarray) -> np.ndarray:
                 x = demand_model.demand(m)

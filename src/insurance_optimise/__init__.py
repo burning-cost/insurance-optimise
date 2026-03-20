@@ -16,11 +16,16 @@ modelling suite absorbed from insurance-demand:
 - DemandCurve: price → demand probability curves
 - ENBPChecker: PS21/11 compliance diagnostic
 
+The ``model_quality`` module (Hedges 2025, arXiv:2512.03242) provides:
+- Closed-form relationship between Pearson correlation and expected LR
+- Model quality report for pricing teams
+- Integration into ConstraintConfig via model_quality_adjusted_lr
+
 Typical workflow
 ----------------
 >>> import numpy as np
 >>> from insurance_optimise import PortfolioOptimiser, ConstraintConfig
->>>
+
 >>> config = ConstraintConfig(
 ...     lr_max=0.70,
 ...     retention_min=0.85,
@@ -55,16 +60,34 @@ the optimiser and set ``stochastic_lr=True`` in the config. Use
 >>> config = ConstraintConfig(lr_max=0.70, stochastic_lr=True, stochastic_alpha=0.90)
 >>> opt = PortfolioOptimiser(..., claims_variance=var_model.variance_claims, constraints=config)
 
+Model quality LR adjustment
+---------------------------
+To account for model imperfection (Hedges 2025), set ``model_quality_adjusted_lr``
+in the config. The effective lr_max is relaxed by the expected loss ratio error
+at the given Pearson correlation rho:
+
+>>> from insurance_optimise import model_quality_report
+>>> report = model_quality_report(rho=0.85, cv_lambda=1.2, eta=1.5, M=1/0.70)
+>>> print(report)
+>>> config = ConstraintConfig(
+...     lr_max=0.70,
+...     model_quality_adjusted_lr=True,
+...     model_rho=0.85,
+...     model_cv_lambda=1.2,
+... )
+
 References
 ----------
 - FCA PS21/11 (ENBP constraint): https://www.fca.org.uk/publication/policy/ps21-11.pdf
 - Branda (2014): stochastic LR constraint via Chebyshev
 - Emms & Haberman (2005): theoretical foundation for demand-linked pricing
+- Hedges (2025): model quality and loss ratio; arXiv:2512.03242
 """
 
 from insurance_optimise.constraints import ConstraintConfig
 from insurance_optimise._demand_model import LogLinearDemand, LogisticDemand, make_demand_model
 from insurance_optimise.frontier import EfficientFrontier
+from insurance_optimise.model_quality import ModelQualityReport, model_quality_report
 from insurance_optimise.optimiser import PortfolioOptimiser
 from insurance_optimise.result import (
     EfficientFrontierResult,
@@ -76,7 +99,7 @@ from insurance_optimise.scenarios import ScenarioObjective
 from insurance_optimise.stochastic import ClaimsVarianceModel
 from insurance_optimise import demand
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 
 __all__ = [
     "PortfolioOptimiser",
@@ -91,6 +114,8 @@ __all__ = [
     "make_demand_model",
     "ScenarioObjective",
     "ClaimsVarianceModel",
+    "ModelQualityReport",
+    "model_quality_report",
     "demand",
     "__version__",
 ]
