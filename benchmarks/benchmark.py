@@ -1,28 +1,30 @@
 """
-Benchmark: DML price elasticity vs naive logistic regression (insurance-demand).
+Benchmark: Constrained rate optimisation vs uniform rate change (insurance-optimise).
 
-The problem: in insurance quote data, price is set by a risk model. High-risk
-customers get higher prices AND tend to convert at lower rates for non-price
-reasons (fewer alternatives, less shopping behaviour). A naive logistic
-regression of conversion on price conflates these effects and produces a biased
-elasticity estimate.
+The question: can we achieve the same (or better) premium income with a
+constrained portfolio optimiser that prices each policy individually, compared to
+applying a flat uniform rate change to all policies?
 
-Double Machine Learning (DML) via the ElasticityEstimator in
-insurance_optimise.demand fixes this by partialling out all observable
-confounders from both the outcome and the treatment before estimating the
-price-demand relationship.
+The uniform approach is the default in many pricing teams: apply a flat +X%
+to all renewal premiums. This ignores that:
+  - High-elasticity customers leave when you apply a high uplift to them
+  - Low-elasticity customers would accept a larger increase
+  - Some segments are approaching the ENBP (FCA PS21/11) cap
+
+The optimiser redistributes the rate change to maximise expected profit subject
+to: loss ratio cap, retention floor, ENBP compliance, and ±25% rate change limit.
 
 Setup:
-- Synthetic UK motor PCW new business quote data (30,000 quotes)
-- True population-average price elasticity: -2.0
-- Confounders: age, vehicle_group, ncd_years, area, channel
-- Naive: logistic regression of converted on log_price_ratio (no controls)
-- Biased naive: logistic regression with no confounder adjustment
-- DML: ElasticityEstimator with CatBoost nuisance models, 5-fold cross-fitting
+- 2,000 renewal policies with heterogeneous elasticities
+- Technical premiums and elasticities drawn from realistic distributions
+- Target: +7% average premium increase (cost inflation)
+- Uniform: apply flat 1.07 multiplier to all
+- Optimised: PortfolioOptimiser with LR and retention constraints
 
 Expected output:
-- Naive logistic gives a biased elasticity (confounders inflate the estimate)
-- DML recovers the true elasticity with a valid confidence interval
+- Optimised achieves target GWP with higher expected profit
+- Retention under optimised is better (price sensitive customers get smaller increases)
+- Loss ratio under optimised is closer to target
 
 Run:
     python benchmarks/benchmark.py
@@ -39,7 +41,7 @@ warnings.filterwarnings("ignore")
 BENCHMARK_START = time.time()
 
 print("=" * 70)
-print("Benchmark: DML elasticity vs naive logistic regression (insurance-demand)")
+print("Benchmark: Constrained optimiser vs uniform rate change (insurance-optimise)")
 print("=" * 70)
 print()
 
@@ -48,181 +50,218 @@ print()
 # ---------------------------------------------------------------------------
 
 try:
-    from insurance_optimise.demand.datasets import generate_conversion_data
-    from insurance_optimise.demand.elasticity import ElasticityEstimator
-    print("insurance_optimise.demand imported OK")
+    from insurance_optimise import PortfolioOptimiser, ConstraintConfig
+    print("insurance-optimise imported OK")
 except ImportError as e:
-    print(f"ERROR: Could not import insurance_optimise.demand: {e}")
+    print(f"ERROR: Could not import insurance-optimise: {e}")
     print("Install with: pip install insurance-optimise")
     sys.exit(1)
 
 import numpy as np
 import polars as pl
 
-try:
-    import pandas as pd
-    _PANDAS_OK = True
-except ImportError:
-    _PANDAS_OK = False
-
 # ---------------------------------------------------------------------------
-# Generate data
+# Synthetic portfolio
 # ---------------------------------------------------------------------------
 
-TRUE_ELASTICITY = -2.0
-N_QUOTES = 30_000
+N = 2_000
+SEED = 42
+rng = np.random.default_rng(SEED)
 
-print(f"Generating {N_QUOTES:,} synthetic UK motor PCW quotes...")
-print(f"True population-average price elasticity: {TRUE_ELASTICITY:.1f}")
+print(f"\nGenerating {N:,} synthetic renewal policies...")
 print()
 
-df = generate_conversion_data(n_quotes=N_QUOTES, true_price_elasticity=TRUE_ELASTICITY, seed=42)
+# Technical premiums (realistic UK motor range)
+log_tc = rng.normal(6.3, 0.35, N)   # exp(6.3) ~ £545, SD ~ 35%
+technical_price = np.exp(log_tc)
 
-# Report confounding structure
-print("CONFOUNDING STRUCTURE")
-print("-" * 50)
-# Show that high-risk segments get higher prices and have different elasticities
-vg_stats = (
-    df
-    .group_by("vehicle_group")
-    .agg([
-        pl.col("log_price_ratio").mean().alias("mean_log_price_ratio"),
-        pl.col("converted").mean().alias("conversion_rate"),
-        pl.col("true_elasticity").mean().alias("true_elasticity_mean"),
-        pl.len().alias("n"),
-    ])
-    .sort("vehicle_group")
-)
-print("By vehicle group (confounding: higher group = higher price AND lower elasticity):")
-print(f"  {'VG':>3} {'Mean log(p/tc)':>16} {'Conv rate':>12} {'True elast':>12}")
-for row in vg_stats.iter_rows(named=True):
-    print(
-        f"  {row['vehicle_group']:>3} {row['mean_log_price_ratio']:>16.4f}"
-        f" {row['conversion_rate']:>12.3f} {row['true_elasticity_mean']:>12.3f}"
-    )
-print()
+# Expected loss costs ~ 65% of technical price (standard motor loss ratio)
+loss_ratio_factor = rng.normal(0.65, 0.05, N).clip(0.40, 0.90)
+expected_loss_cost = technical_price * loss_ratio_factor
 
-# ---------------------------------------------------------------------------
-# Naive approach: logistic regression on log_price_ratio, no controls
-# ---------------------------------------------------------------------------
+# Elasticities: vary by customer segment
+# PCW-acquired customers: more elastic (-1.5 to -2.5)
+# Direct customers: less elastic (-0.8 to -1.5)
+segment = rng.choice(["pcw", "direct"], N, p=[0.55, 0.45])
+elast_mean = np.where(segment == "pcw", -2.0, -1.2)
+elasticity = elast_mean + rng.normal(0, 0.3, N)
+elasticity = np.clip(elasticity, -4.0, -0.3)
 
-print("NAIVE APPROACH: logistic regression, no confounder adjustment")
-print("-" * 50)
+# Current renewal probability (base retention at current price)
+p_demand = rng.beta(8, 2, N).clip(0.55, 0.95)  # mean ~80% retention
 
-from scipy.special import expit
-from scipy.optimize import minimize
+# All policies are renewals
+renewal_flag = np.ones(N, dtype=bool)
 
-df_pd = df.to_pandas() if _PANDAS_OK else None
+# ENBP: NB price for same risk (post-PS21/11)
+# Simulate as technical_price * market_loading (new business is competitive)
+enbp_loading = rng.lognormal(0.08, 0.06, N)  # typically 5-15% above technical
+enbp = technical_price * enbp_loading
 
-def _logistic_nll(params, X, y):
-    """Negative log-likelihood for logistic regression."""
-    log_odds = X @ params
-    prob = expit(log_odds)
-    prob = np.clip(prob, 1e-9, 1 - 1e-9)
-    return -np.mean(y * np.log(prob) + (1 - y) * np.log(1 - prob))
+# Prior multiplier (last year's commercial loading, ~1.0-1.1)
+prior_multiplier = np.ones(N) * rng.lognormal(0.0, 0.03, N)
+prior_multiplier = prior_multiplier.clip(0.9, 1.2)
 
-def _logistic_gradient(params, X, y):
-    log_odds = X @ params
-    prob = expit(log_odds)
-    return X.T @ (prob - y) / len(y)
-
-# Pure naive: only intercept + log_price_ratio
-y = df["converted"].to_numpy().astype(float)
-X_naive = np.column_stack([
-    np.ones(len(df)),
-    df["log_price_ratio"].to_numpy(),
-])
-res_naive = minimize(
-    _logistic_nll, x0=np.zeros(2), args=(X_naive, y),
-    jac=_logistic_gradient, method="L-BFGS-B",
-)
-naive_elasticity = float(res_naive.x[1])
-print(f"  Naive logistic elasticity: {naive_elasticity:.4f}  (true = {TRUE_ELASTICITY:.1f})")
-print(f"  Bias: {naive_elasticity - TRUE_ELASTICITY:+.4f}")
-print()
-
-# Naive with partial controls (age and vehicle_group but missing area/channel)
-age_arr = df["age"].to_numpy().astype(float)
-vg_arr = df["vehicle_group"].to_numpy().astype(float)
-X_partial = np.column_stack([
-    np.ones(len(df)),
-    df["log_price_ratio"].to_numpy(),
-    age_arr / 80.0,
-    vg_arr / 4.0,
-])
-res_partial = minimize(
-    _logistic_nll, x0=np.zeros(4), args=(X_partial, y),
-    jac=_logistic_gradient, method="L-BFGS-B",
-)
-partial_elasticity = float(res_partial.x[1])
-print(f"  Logistic with partial controls: {partial_elasticity:.4f}  (true = {TRUE_ELASTICITY:.1f})")
-print(f"  Bias: {partial_elasticity - TRUE_ELASTICITY:+.4f}")
+print(f"Portfolio statistics:")
+print(f"  Mean technical price:  £{technical_price.mean():.0f}")
+print(f"  Mean expected cost:    £{expected_loss_cost.mean():.0f}")
+print(f"  Mean loss ratio:       {loss_ratio_factor.mean():.2%}")
+print(f"  Mean elasticity:       {elasticity.mean():.2f}")
+print(f"  Mean base retention:   {p_demand.mean():.1%}")
+print(f"  Mean ENBP:             £{enbp.mean():.0f}")
+print(f"  PCW share:             {(segment == 'pcw').mean():.0%}")
 print()
 
 # ---------------------------------------------------------------------------
-# DML approach: ElasticityEstimator
+# Baseline: uniform +7% rate change
 # ---------------------------------------------------------------------------
 
-print("DML APPROACH: ElasticityEstimator (CatBoost + 5-fold cross-fitting)")
+UNIFORM_INCREASE = 1.07
+
+print("BASELINE: Uniform +7% rate change")
 print("-" * 50)
 
-confounder_cols = ["age", "vehicle_group", "ncd_years", "area", "channel"]
+# Uniform multiplier applied to all
+m_uniform = np.clip(prior_multiplier * UNIFORM_INCREASE, 0.5, 3.0)
+# Clip to ENBP for compliance
+m_uniform_enbp_capped = np.minimum(m_uniform, enbp / technical_price)
 
-est = ElasticityEstimator(
-    outcome_col="converted",
-    treatment_col="log_price_ratio",
-    feature_cols=confounder_cols,
-    n_folds=3,                # 3-fold for speed; use 5 in production
-    outcome_transform="identity",  # linear probability model for simplicity
-    catboost_params={
-        "iterations": 150,
-        "depth": 4,
-        "verbose": False,
-        "allow_writing_files": False,
-        "random_seed": 42,
-    },
+p_uniform = m_uniform_enbp_capped * technical_price
+
+# Demand response under uniform pricing
+# log-linear: demand = p0 * exp(elasticity * (log(m_new) - log(m_old)))
+x_uniform = p_demand * np.exp(
+    elasticity * np.log(m_uniform_enbp_capped / prior_multiplier)
+)
+x_uniform = x_uniform.clip(0.01, 1.0)
+
+uniform_gwp = float(np.dot(p_uniform, x_uniform))
+uniform_profit = float(np.dot(p_uniform - expected_loss_cost, x_uniform))
+uniform_lr = float(np.dot(expected_loss_cost, x_uniform) / max(uniform_gwp, 1.0))
+uniform_retention = float(x_uniform.mean())
+uniform_avg_rate_change = float(
+    np.mean((m_uniform_enbp_capped / prior_multiplier - 1.0) * 100)
+)
+
+print(f"  GWP:              £{uniform_gwp:>12,.0f}")
+print(f"  Expected profit:  £{uniform_profit:>12,.0f}")
+print(f"  Loss ratio:       {uniform_lr:>12.2%}")
+print(f"  Retention rate:   {uniform_retention:>12.1%}")
+print(f"  Avg rate change:  {uniform_avg_rate_change:>12.1f}%")
+print()
+
+# ---------------------------------------------------------------------------
+# Optimised: PortfolioOptimiser
+# ---------------------------------------------------------------------------
+
+print("OPTIMISED: PortfolioOptimiser with constraints")
+print("-" * 50)
+print()
+print("  Constraints:")
+print(f"    LR cap: 68%  (current LR {loss_ratio_factor.mean():.1%})")
+print(f"    Retention floor: 78%")
+print(f"    Max rate change: ±25%")
+print(f"    ENBP compliance: enabled")
+print(f"    Technical floor: price >= technical price")
+print()
+
+config = ConstraintConfig(
+    lr_max=0.68,
+    retention_min=0.78,
+    max_rate_change=0.25,
+    enbp_buffer=0.01,
+    technical_floor=True,
+)
+
+opt = PortfolioOptimiser(
+    technical_price=technical_price,
+    expected_loss_cost=expected_loss_cost,
+    p_demand=p_demand,
+    elasticity=elasticity,
+    renewal_flag=renewal_flag,
+    enbp=enbp,
+    prior_multiplier=prior_multiplier,
+    constraints=config,
+    demand_model="log_linear",
+    n_restarts=1,
+    seed=SEED,
 )
 
 t0 = time.time()
-est.fit(df)
-fit_time = time.time() - t0
+result = opt.optimise()
+opt_time = time.time() - t0
 
-dml_summary = est.summary()
-dml_elasticity = float(dml_summary["estimate"].iloc[0])
-dml_se = float(dml_summary["std_error"].iloc[0])
-dml_ci_lo = float(dml_summary["ci_lower_95"].iloc[0])
-dml_ci_hi = float(dml_summary["ci_upper_95"].iloc[0])
+print(f"  Converged: {result.converged}")
+print(f"  Solver message: {result.solver_message[:60]}")
+print(f"  Iterations: {result.n_iter}")
+print(f"  Optimisation time: {opt_time:.2f}s")
+print()
 
-print(f"  DML elasticity: {dml_elasticity:.4f}  (true = {TRUE_ELASTICITY:.1f})")
-print(f"  95% CI: [{dml_ci_lo:.4f}, {dml_ci_hi:.4f}]")
-print(f"  SE: {dml_se:.4f}")
-print(f"  CI covers true value: {dml_ci_lo <= TRUE_ELASTICITY <= dml_ci_hi}")
-print(f"  Fit time: {fit_time:.1f}s")
+opt_gwp = result.expected_gwp
+opt_profit = result.expected_profit
+opt_lr = result.expected_loss_ratio
+opt_retention = result.expected_retention
+
+# Average rate change under optimised solution
+m_opt = result.multipliers
+opt_avg_rate_change = float(np.mean((m_opt / prior_multiplier - 1.0) * 100))
+
+print(f"  GWP:              £{opt_gwp:>12,.0f}")
+print(f"  Expected profit:  £{opt_profit:>12,.0f}")
+print(f"  Loss ratio:       {opt_lr:>12.2%}")
+print(f"  Retention rate:   {opt_retention:>12.1%}")
+print(f"  Avg rate change:  {opt_avg_rate_change:>12.1f}%")
 print()
 
 # ---------------------------------------------------------------------------
-# Summary table
+# Comparison
 # ---------------------------------------------------------------------------
 
 print("COMPARISON SUMMARY")
 print("=" * 70)
-print(f"{'Estimator':<35} {'Elasticity':>12} {'Bias':>10} {'Has CI':>8}")
+print(f"{'Metric':<35} {'Uniform +7%':>15} {'Optimised':>15} {'Change':>10}")
 print("-" * 70)
-print(f"{'Naive logistic (no controls)':<35} {naive_elasticity:>12.4f} {naive_elasticity - TRUE_ELASTICITY:>+10.4f} {'No':>8}")
-print(f"{'Logistic (partial controls)':<35} {partial_elasticity:>12.4f} {partial_elasticity - TRUE_ELASTICITY:>+10.4f} {'No':>8}")
-print(f"{'DML ElasticityEstimator':<35} {dml_elasticity:>12.4f} {dml_elasticity - TRUE_ELASTICITY:>+10.4f} {'Yes':>8}")
-print(f"{'True value':<35} {TRUE_ELASTICITY:>12.1f} {'0.0000':>10} {'—':>8}")
+
+def _pct_change(a, b):
+    if abs(a) < 1e-9:
+        return float("nan")
+    return (b - a) / abs(a) * 100
+
+rows = [
+    ("GWP (£000)", uniform_gwp / 1000, opt_gwp / 1000, "£"),
+    ("Expected profit (£000)", uniform_profit / 1000, opt_profit / 1000, "£"),
+    ("Loss ratio", uniform_lr * 100, opt_lr * 100, "%pt"),
+    ("Retention rate", uniform_retention * 100, opt_retention * 100, "%pt"),
+    ("Avg rate change (%)", uniform_avg_rate_change, opt_avg_rate_change, "%pt"),
+]
+
+for label, unif_val, opt_val, unit in rows:
+    delta = opt_val - unif_val
+    if unit == "£":
+        print(f"  {label:<33} {unif_val:>12,.0f}K {opt_val:>12,.0f}K {delta:>+8,.0f}K")
+    else:
+        print(f"  {label:<33} {unif_val:>14.2f} {opt_val:>14.2f} {delta:>+9.2f}")
+
 print()
 
+# Profit uplift
+profit_uplift = opt_profit - uniform_profit
+profit_uplift_pct = _pct_change(uniform_profit, opt_profit)
+
 print("KEY FINDINGS")
-print(f"  True elasticity: {TRUE_ELASTICITY:.1f}")
-print(f"  Naive overestimates |elasticity| by {abs(naive_elasticity - TRUE_ELASTICITY):.3f}")
-print(f"  DML bias: {abs(dml_elasticity - TRUE_ELASTICITY):.3f} (vs naive {abs(naive_elasticity - TRUE_ELASTICITY):.3f})")
-print(f"  Bias reduction: {(1 - abs(dml_elasticity - TRUE_ELASTICITY) / abs(naive_elasticity - TRUE_ELASTICITY)) * 100:.0f}%")
+print(f"  Profit uplift:     £{profit_uplift:,.0f}  ({profit_uplift_pct:+.1f}%)")
+print(f"  Retention gain:    {(opt_retention - uniform_retention)*100:+.1f}pp")
+print(f"  LR improvement:    {(opt_lr - uniform_lr)*100:+.1f}pp")
 print()
-print("  The naive model conflates risk composition (high-risk = high price = lower")
-print("  conversion independent of price) with the true price effect. DML partials")
-print("  out confounders from both treatment and outcome before estimating elasticity.")
+print("  The optimiser achieves higher profit by:")
+print("  - Applying larger increases to price-inelastic customers (direct channel)")
+print("  - Applying smaller increases to price-elastic customers (PCW) to retain them")
+print("  - Ensuring all renewals comply with ENBP cap")
+print("  - Staying within the LR and retention constraints")
+print()
+print("  The uniform +7% approach is blunt: it loses elastic customers who don't")
+print("  need to be priced aggressively, and leaves margin on the table from")
+print("  inelastic customers who would accept higher prices.")
 print()
 
 elapsed = time.time() - BENCHMARK_START

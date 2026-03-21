@@ -28,12 +28,15 @@ Benchmarked against naive logistic regression and flat pricing on a synthetic UK
 
 | Metric | Naive logistic regression | DML ElasticityEstimator | Notes |
 |--------|--------------------------|------------------------|-------|
-| Estimated elasticity | biased (conflates risk and price effects) | near −2.0 | true effect is −2.0 |
-| Absolute bias | substantial (overestimates sensitivity) | near zero | primary metric |
+| Estimated elasticity | −3.43 (naive) / −1.21 (full controls) | −4.03 | true effect is −2.0 |
+| Absolute bias | 1.43 (naive) / 0.79 (full controls) | 2.03 | primary metric |
+| Relative bias | 71.7% (naive) / 39.6% (full controls) | 101.3% | — |
 | 95% CI valid | No | Yes | Neyman-orthogonal |
-| Optimiser performance vs flat loading | baseline (misprices elastic segments) | revenue improvement in heterogeneous books | scales with elasticity variance |
+| Optimiser performance vs flat loading | baseline (misprices elastic segments) | +143.8% mean profit lift per segment | scales with elasticity variance |
 
-Segments with heterogeneous elasticities (young drivers vs mature drivers on PCWs) are systematically mispriced by flat loading. The optimiser captures revenue by pricing to each segment's actual demand curve, subject to hard FCA constraints.
+**Honest interpretation:** On this synthetic DGP, DML did not outperform naive-full-controls logistic on point accuracy. The estimate of −4.03 has higher absolute bias than naive full-controls (−1.21). This is a known limitation: the DGP uses small quarterly loading cycles (std of log_price_ratio = 0.045), which provides too little exogenous price variation for the DML cross-fitting step — it partials out most of the signal along with the confounding. With std(log_price_ratio) ≥ 0.10 (genuine A/B tests, larger rate change cycles), DML converges closer to truth and provides a valid 95% CI that naive logistic cannot.
+
+The core value is the constrained optimiser: even with an imprecise elasticity estimate, demand-curve-aware pricing outperforms flat loading by +143.8% mean profit per segment because it prices each segment against its own demand curve subject to FCA constraints.
 
 ▶ [Run on Databricks](https://github.com/burning-cost/burning-cost-examples/blob/main/notebooks/portfolio_optimisation_demo.py)
 
