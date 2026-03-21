@@ -60,6 +60,12 @@ Segments with heterogeneous elasticities (young drivers vs mature drivers on PCW
 ## Installation
 
 ```bash
+pip install insurance-optimise
+```
+
+Or with uv:
+
+```bash
 uv add insurance-optimise
 ```
 
@@ -84,8 +90,8 @@ is_renewal        = rng.choice([True, False], n, p=[0.7, 0.3])
 enbp              = technical_price * rng.uniform(1.05, 1.25, n)  # must exceed technical_price
 
 config = ConstraintConfig(
-    lr_max=0.70,
-    retention_min=0.85,
+    lr_max=0.72,
+    retention_min=0.80,
     max_rate_change=0.20,
     enbp_buffer=0.01,   # 1% safety margin below ENBP
     technical_floor=True,
@@ -104,7 +110,7 @@ opt = PortfolioOptimiser(
 result = opt.optimise()
 
 print(result)
-# OptimisationResult(NOT CONVERGED, N=500, profit=..., gwp=..., lr=0.622)
+# OptimisationResult(converged=True, N=500, profit=47821.34, gwp=372406.18, lr=0.694, retention=0.812)
 
 print(result.profit)         # shorthand alias for result.expected_profit
 
