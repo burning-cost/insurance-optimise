@@ -60,7 +60,7 @@ Segments with heterogeneous elasticities (young drivers vs mature drivers on PCW
 ## Installation
 
 ```bash
-pip install insurance-optimise
+uv add insurance-optimise
 ```
 
 ## Quick start
