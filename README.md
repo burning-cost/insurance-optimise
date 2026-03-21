@@ -353,16 +353,15 @@ Commercial tools (Akur8, WTW Radar, Earnix) do not expose their optimisation met
 
 ## Related Libraries
 
-| Library | What it does |
+| Library | Description |
 |---------|-------------|
-| [insurance-elasticity](https://github.com/burning-cost/insurance-elasticity) | Causal price elasticity and demand modelling — provides the `p_demand` and `elasticity` inputs this library requires |
-| [insurance-demand](https://github.com/burning-cost/insurance-demand) | Conversion and retention modelling — demand curves from this library are the primary input to the optimiser |
-| [insurance-survival](https://github.com/burning-cost/insurance-survival) | Survival-adjusted CLV — use CLV outputs to inform retention constraints rather than setting them arbitrarily |
-| [insurance-deploy](https://github.com/burning-cost/insurance-deploy) | Model deployment — optimised rates flow into the champion/challenger deployment framework |
-| [insurance-causal-policy](https://github.com/burning-cost/insurance-causal-policy) | SDID causal evaluation — after running the optimiser, use this to prove the rate change achieved what it was supposed to |
+| [insurance-fairness](https://github.com/burning-cost/insurance-fairness) | Proxy discrimination auditing — use fairness constraints in the Pareto surface alongside profit and retention |
+| [insurance-causal](https://github.com/burning-cost/insurance-causal) | Causal price elasticity and demand modelling — provides the `p_demand` and `elasticity` inputs this library requires |
 | [insurance-monitoring](https://github.com/burning-cost/insurance-monitoring) | Model monitoring — the optimised strategy will degrade as the portfolio drifts; this library catches when it needs refreshing |
-
-[All Burning Cost libraries →](https://burning-cost.github.io)
+| [insurance-elasticity](https://github.com/burning-cost/insurance-elasticity) | Price elasticity estimation — upstream demand model feeding directly into the optimiser |
+| [insurance-demand](https://github.com/burning-cost/insurance-demand) | Conversion and retention modelling — demand curves are the primary input to the optimiser |
+| [insurance-deploy](https://github.com/burning-cost/insurance-deploy) | Champion/challenger deployment — optimised rates flow into the deployment framework |
+| [insurance-causal-policy](https://github.com/burning-cost/insurance-causal-policy) | SDID causal evaluation — after running the optimiser, use this to prove the rate change achieved what it was supposed to |
 
 ## Source repos
 
