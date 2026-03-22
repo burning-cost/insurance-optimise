@@ -100,10 +100,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/burning-cost/insurance-optimise"
+Homepage = "https://burning-cost.github.io/insurance-optimise"
 Repository = "https://github.com/burning-cost/insurance-optimise"
-Issues = "https://github.com/burning-cost/insurance-optimise/issues"
+Changelog = "https://github.com/burning-cost/insurance-optimise/releases"
 Documentation = "https://burning-cost.github.io/insurance-optimise/"
+Issues = "https://github.com/burning-cost/insurance-optimise/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/insurance_optimise"]
