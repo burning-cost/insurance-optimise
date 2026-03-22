@@ -3,10 +3,10 @@
 [![PyPI](https://img.shields.io/pypi/v/insurance-optimise)](https://pypi.org/project/insurance-optimise/)
 [![Python](https://img.shields.io/pypi/pyversions/insurance-optimise)](https://pypi.org/project/insurance-optimise/)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)]()
-[![License](https://img.shields.io/badge/license-BSD--3-blue)]()
+[![License](https://img.shields.io/badge/license-MIT-green)]()
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/burning-cost/insurance-optimise/blob/main/notebooks/quickstart.ipynb)
 
-> 💬 Questions or feedback? Start a [Discussion](https://github.com/burning-cost/insurance-optimise/discussions). Found it useful? A ⭐ helps others find it.
+> Questions or feedback? Start a [Discussion](https://github.com/burning-cost/insurance-optimise/discussions). Found it useful? A star helps others find it.
 
 **Flat loading on a price comparison website leaves money in every segment where your elasticity varies. This library finds the right multiplier for each risk.**
 
@@ -444,7 +444,7 @@ Single-objective SLSQP is blind to the fairness dimension — it achieves a disp
 
 ## Licence
 
-BSD-3
+MIT
 
 ---
 
