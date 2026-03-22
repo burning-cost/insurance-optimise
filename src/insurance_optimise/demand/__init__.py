@@ -53,8 +53,6 @@ from .elasticity import ElasticityEstimator
 from .demand_curve import DemandCurve
 from .optimiser import OptimalPrice, OptimisationResult
 
-from .. import __version__
-
 __all__ = [
     "ConversionModel",
     "RetentionModel",
