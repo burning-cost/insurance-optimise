@@ -7,7 +7,7 @@ name = "insurance-optimise"
 version = "0.4.1"
 description = "Constrained portfolio rate optimisation for UK personal lines insurance, with FCA ENBP enforcement, demand-linked objectives, efficient frontier, 3-objective Pareto surface with fairness, and model quality LR adjustment"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
     { name = "Burning Cost", email = "pricing.frontier@gmail.com" },
 ]
