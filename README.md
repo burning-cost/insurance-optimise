@@ -1,6 +1,7 @@
 # insurance-optimise
 
 [![PyPI](https://img.shields.io/pypi/v/insurance-optimise)](https://pypi.org/project/insurance-optimise/)
+[![Downloads](https://img.shields.io/pypi/dm/insurance-optimise)](https://pypi.org/project/insurance-optimise/)
 [![Python](https://img.shields.io/pypi/pyversions/insurance-optimise)](https://pypi.org/project/insurance-optimise/)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
