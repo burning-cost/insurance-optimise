@@ -47,6 +47,13 @@ Optional extras:
 
 from __future__ import annotations
 
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("insurance-optimise")
+except PackageNotFoundError:
+    __version__ = "0.0.0"
+
 from .conversion import ConversionModel
 from .retention import RetentionModel
 from .elasticity import ElasticityEstimator

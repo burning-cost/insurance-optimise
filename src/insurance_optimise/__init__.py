@@ -109,6 +109,13 @@ References
 - Hedges (2025): model quality and loss ratio; arXiv:2512.03242
 """
 
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("insurance-optimise")
+except PackageNotFoundError:
+    __version__ = "0.0.0"  # not installed
+
 from insurance_optimise.constraints import ConstraintConfig
 from insurance_optimise._demand_model import LogLinearDemand, LogisticDemand, make_demand_model
 from insurance_optimise.frontier import EfficientFrontier
@@ -129,13 +136,6 @@ from insurance_optimise.result import (
 from insurance_optimise.scenarios import ScenarioObjective
 from insurance_optimise.stochastic import ClaimsVarianceModel
 from insurance_optimise import demand
-
-from importlib.metadata import version, PackageNotFoundError
-
-try:
-    __version__ = version("insurance-optimise")
-except PackageNotFoundError:
-    __version__ = "0.0.0"  # not installed
 
 __all__ = [
     "PortfolioOptimiser",
