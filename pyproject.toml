@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "insurance-optimise"
-version = "0.4.1"
+version = "0.4.2"
 description = "Constrained portfolio rate optimisation for UK personal lines insurance, with FCA ENBP enforcement, demand-linked objectives, efficient frontier, 3-objective Pareto surface with fairness, and model quality LR adjustment"
 readme = "README.md"
 license = "MIT"
@@ -55,7 +55,7 @@ dependencies = [
     "scikit-learn>=1.3",
     "scipy>=1.10",
     "statsmodels>=0.14.5",
-    "pyarrow>=23.0.1",
+    "pyarrow>=12.0",
 ]
 
 [project.optional-dependencies]
