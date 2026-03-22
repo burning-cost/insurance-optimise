@@ -130,7 +130,12 @@ from insurance_optimise.scenarios import ScenarioObjective
 from insurance_optimise.stochastic import ClaimsVarianceModel
 from insurance_optimise import demand
 
-__version__ = "0.4.1"
+from importlib.metadata import version, PackageNotFoundError
+
+try:
+    __version__ = version("insurance-optimise")
+except PackageNotFoundError:
+    __version__ = "0.0.0"  # not installed
 
 __all__ = [
     "PortfolioOptimiser",
