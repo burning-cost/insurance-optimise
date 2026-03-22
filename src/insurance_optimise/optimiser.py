@@ -155,7 +155,7 @@ class PortfolioOptimiser:
         )
         self.config = constraints if constraints is not None else ConstraintConfig()
         self.demand_model_name = demand_model
-        self.solver_method = solver.upper() if solver == "slsqp" else "trust-constr"
+        self.solver_method = "SLSQP" if solver.lower() == "slsqp" else "trust-constr"
         self.n_restarts = max(1, n_restarts)
         self.rng = np.random.default_rng(seed)
         self.ftol = ftol

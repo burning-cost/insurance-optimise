@@ -67,6 +67,42 @@ class TestInputValidation:
                 demand_model="random_forest",
             )
 
+    def test_solver_uppercase_slsqp(self, small_portfolio):
+        """solver='SLSQP' (uppercase) should resolve to the SLSQP solver, not trust-constr."""
+        p = small_portfolio
+        opt = PortfolioOptimiser(
+            technical_price=p['technical_price'],
+            expected_loss_cost=p['expected_loss_cost'],
+            p_demand=p['p_demand'],
+            elasticity=p['elasticity'],
+            solver='SLSQP',
+        )
+        assert opt.solver_method == 'SLSQP'
+
+    def test_solver_lowercase_slsqp(self, small_portfolio):
+        """solver='slsqp' (lowercase) should also resolve to SLSQP."""
+        p = small_portfolio
+        opt = PortfolioOptimiser(
+            technical_price=p['technical_price'],
+            expected_loss_cost=p['expected_loss_cost'],
+            p_demand=p['p_demand'],
+            elasticity=p['elasticity'],
+            solver='slsqp',
+        )
+        assert opt.solver_method == 'SLSQP'
+
+    def test_solver_unknown_falls_back_to_trust_constr(self, small_portfolio):
+        """Any solver string that is not 'slsqp' (case-insensitive) gives trust-constr."""
+        p = small_portfolio
+        opt = PortfolioOptimiser(
+            technical_price=p['technical_price'],
+            expected_loss_cost=p['expected_loss_cost'],
+            p_demand=p['p_demand'],
+            elasticity=p['elasticity'],
+            solver='trust-constr',
+        )
+        assert opt.solver_method == 'trust-constr'
+
 
 class TestUnconstrainedOptimisation:
 
