@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.3] - 2026-03-23
+
+### Fixed
+- Bumped numpy minimum version from >=1.24 to >=1.25 to ensure compatibility with scipy's use of numpy.exceptions (added in numpy 1.25)
+
+
 ## v0.4.1 (2026-03-22) [unreleased]
 - Fix licence badge (BSD-3 -> MIT) and footer; remove emoji from discussion CTA
 - fix(readme): correct factually wrong Why bother table for DML elasticity
