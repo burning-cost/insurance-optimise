@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.4] - 2026-03-23
+
+### Fixed
+- docs: update README quickstart output comment to match current `OptimisationResult.__repr__` format — old format showed `converged=True, profit=47821.34, retention=0.812`; actual format is `CONVERGED, profit=118,196` (no decimal, comma-grouped, no retention field)
+
+
 ## [0.4.3] - 2026-03-23
 
 ### Fixed

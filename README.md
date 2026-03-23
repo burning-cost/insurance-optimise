@@ -114,7 +114,7 @@ opt = PortfolioOptimiser(
 result = opt.optimise()
 
 print(result)
-# OptimisationResult(converged=True, N=500, profit=47821.34, gwp=372406.18, lr=0.694, retention=0.812)
+# OptimisationResult(CONVERGED, N=500, profit=118,196, gwp=372,406, lr=0.694)
 
 print(result.profit)         # shorthand alias for result.expected_profit
 
