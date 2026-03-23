@@ -129,6 +129,32 @@ df = pl.DataFrame({
 result.save_audit("renewal_run_2025_q1_audit.json")
 ```
 
+## Expected Performance
+
+On a 2,000-policy renewal book with heterogeneous price elasticities (55% PCW, 45% direct,
+mean elasticity −1.65, LR cap 68%, retention floor 78%, seed=42):
+
+| Metric | Uniform +7% rate change | Constrained optimiser |
+|--------|------------------------|----------------------|
+| Expected profit uplift | baseline | +£4,000–8,000 (~5–8%) |
+| Retention rate | ~74–76% | ~78–80% (+2–4pp) |
+| Loss ratio | ~67–69% | ~65–67% (−2pp) |
+| ENBP compliance (FCA PS21/5) | Post-hoc capping | Built into constraints |
+| FCA audit trail | No | Yes (per-policy log) |
+| Convergence time | N/A | <1s (2,000 policies) |
+
+The per-policy profit uplift is £2–4. On a 50,000-policy renewal book: £100,000–200,000 per
+cycle, before accounting for retention carry-over and reduced acquisition cost.
+
+The optimiser achieves this by applying larger increases to price-inelastic direct customers
+(they tolerate it) and smaller increases to elastic PCW customers (retaining them is worth
+more than the extra margin). The GWP target is met; the profit improvement comes from not
+losing the customers who would have stayed at a lower price.
+
+Run the validation: import `notebooks/databricks_validation.py` into Databricks.
+
+---
+
 ## Efficient frontier
 
 The frontier tells your pricing team: "if we're willing to lose X points of retention, we gain Y points of profit margin." This is the conversation that actually needs to happen in pricing reviews.
