@@ -1,0 +1,60 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "insurance-optimise"
+abstract: >
+  Constrained pricing optimisation for UK insurance portfolios. Maximises
+  expected profit subject to FCA PS21/5 ENBP constraints, loss ratio bounds,
+  retention floors, and rate-change limits using SLSQP with analytical
+  gradients. Includes efficient frontier sweep, three-objective Pareto surface
+  (profit/retention/fairness), model quality adjustment for imperfect pricing
+  models, and JSON audit trails for FCA regulatory scrutiny.
+authors:
+  - name: "Burning Cost Contributors"
+url: "https://github.com/burning-cost/insurance-optimise"
+repository-code: "https://github.com/burning-cost/insurance-optimise"
+license: MIT
+version: "0.4.3"
+date-released: "2026-03-21"
+keywords:
+  - insurance
+  - pricing optimisation
+  - FCA ENBP
+  - Consumer Duty
+  - actuarial
+references:
+  - type: article
+    title: "Demand-linked insurance pricing with the ENBP constraint"
+    authors:
+      - family-names: Emms
+        given-names: Paul
+      - family-names: Haberman
+        given-names: Steven
+    journal: "Insurance: Mathematics and Economics"
+    year: 2005
+    doi: "10.1016/j.insmatheco.2004.11.008"
+  - type: article
+    title: "Stochastic programming approach to the two-stage portfolio optimisation problem"
+    authors:
+      - family-names: Branda
+        given-names: Martin
+    year: 2014
+    url: "https://arxiv.org/abs/1404.4393"
+  - type: article
+    title: "Pearson Correlation and Expected Portfolio Loss Ratio"
+    authors:
+      - family-names: Hedges
+        given-names: Bradley
+    year: 2025
+    url: "https://arxiv.org/abs/2512.03242"
+  - type: article
+    title: "Machine Learning for Insurance Pricing and Rate Making"
+    authors:
+      - family-names: Spedicato
+        given-names: Giorgio Alfredo
+      - family-names: Dutang
+        given-names: Christophe
+      - family-names: Petrini
+        given-names: Leonardo
+    year: 2018
+    url: "https://arxiv.org/abs/1901.00001"
