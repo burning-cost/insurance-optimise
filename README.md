@@ -496,6 +496,10 @@ Single-objective SLSQP is blind to the fairness dimension — it achieves a disp
 
 
 
+## Training Course
+
+Want structured learning? [Insurance Pricing in Python](https://burning-cost.github.io/course) is a 12-module course covering the full pricing workflow. Module 8 covers rate optimisation — demand modelling, constrained optimisation, Pareto surfaces, and satisfying Consumer Duty fairness requirements simultaneously. £97 one-time.
+
 ## Licence
 
 MIT
