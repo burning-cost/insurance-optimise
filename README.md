@@ -23,6 +23,10 @@ The question is: what set of price multipliers maximises profit subject to all o
 
 That's what this library solves.
 
+## Part of the Burning Cost stack
+
+Takes model predictions from [insurance-gam](https://github.com/burning-cost/insurance-gam), [insurance-causal](https://github.com/burning-cost/insurance-causal), or [insurance-frequency-severity](https://github.com/burning-cost/insurance-frequency-severity), plus constraint definitions. Feeds optimised rates into [insurance-monitoring](https://github.com/burning-cost/insurance-monitoring) (post-deployment tracking) and [insurance-fairness](https://github.com/burning-cost/insurance-fairness) (constraint checking for Consumer Duty compliance). → [See the full stack](https://burning-cost.github.io/stack/)
+
 ## Why bother
 
 Benchmarked against naive logistic regression and flat pricing on a synthetic UK motor PCW quote panel — 50,000 quotes, true price elasticity −2.0, confounded assignment.
