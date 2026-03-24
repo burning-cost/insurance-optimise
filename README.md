@@ -11,7 +11,7 @@
 
 **Flat loading on a price comparison website leaves money in every segment where your elasticity varies. This library finds the right multiplier for each risk.**
 
-You have a pricing model. It tells you the right technical price for each risk. But "technically correct" isn't the only constraint. You also have:
+Manual scenario-testing in a spreadsheet finds one solution at a time and cannot simultaneously enforce ENBP ceilings, loss ratio floors, retention constraints, and per-policy rate change caps. insurance-optimise formulates all of those as a constrained optimisation problem with analytical gradients, solves it in seconds for portfolios up to 10,000 policies, and produces an FCA-auditable JSON record showing ENBP was enforced for every renewal. Your constraints include:
 
 - FCA PS21/5 (ENBP): renewal premiums cannot exceed what a new customer would be quoted — this is a hard per-policy pricing ceiling
 - Consumer Duty (PS22/9): a principles-based governance obligation to demonstrate fair value across customer outcomes — distinct from ENBP and not a per-policy pricing ceiling
@@ -404,6 +404,15 @@ Commercial tools (Akur8, WTW Radar, Earnix) do not expose their optimisation met
 - **Model quality adjustment requires a Pearson correlation estimate that is itself uncertain.** The `model_quality_report()` function implements the Hedges (2025) formula correcting the LR target for your model's Pearson correlation rho. In practice, rho is estimated from out-of-sample validation data and has a confidence interval. Plugging the point estimate of rho into the formula ignores this uncertainty. If rho=0.80 with a 95% CI of [0.74, 0.86], the implied LR adjustment ranges by 2–4 percentage points. Run the model quality report at rho lower bound and rho upper bound to understand the sensitivity of the LR constraint to model quality uncertainty.
 
 - **No multi-period optimisation.** The optimiser solves a single-period problem: what multiplier maximises expected profit over the upcoming renewal cycle? It does not account for the dynamic consequences of pricing decisions — customer tenure effects, NCD accumulation, adverse selection at extreme prices, or competitor response. A policy that maximises single-period profit by raising prices sharply may erode the long-term book quality through selective lapse of good risks. Multi-period pricing optimisation is a materially harder problem outside the scope of this library.
+
+## Limitations
+
+- The demand model extrapolates using the assumed elasticity functional form. The log-linear demand model is appropriate for price changes in the ±10–15% range typical of UK personal lines renewals. At changes above ±20%, the constant-elasticity assumption produces unrealistically large demand responses. The optimiser does not warn when proposed multipliers exceed this range — set `max_rate_change` accordingly.
+- Elasticity inputs are treated as known point estimates. The optimiser does not propagate elasticity uncertainty. If your elasticity estimates have wide confidence intervals, use `optimise_scenarios()` across pessimistic/central/optimistic assumptions to understand the sensitivity.
+- SLSQP occasionally reports convergence from the starting point without moving. The library checks constraint satisfaction post-solve and flags `converged=False`, but the solution may not be meaningful. Re-run with a different starting point if you see convergence failures.
+- For portfolios above N = 5,000 policies, optimisation time becomes material. The recommended approach is to aggregate to risk segments before optimising. This is an approximation — within-segment elasticity heterogeneity is averaged out.
+- Consumer Duty compliance requires governance that the optimiser cannot provide. The JSON audit trail records the constraint configuration and the solution. It does not replace Board sign-off, pricing committee documentation, ongoing monitoring, or the outcome testing that Consumer Duty requires.
+
 
 ## Related Libraries
 
