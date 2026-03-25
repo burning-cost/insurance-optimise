@@ -7,6 +7,7 @@ Solves the insurance pricing optimisation problem:
 - Analytical gradients for SLSQP — fast enough for N=10,000 policies
 - Efficient frontier via epsilon-constraint sweep (bi-objective)
 - 3-objective Pareto surface via 2D epsilon-constraint grid (ParetoFrontier)
+- Bi-objective Pareto front visualiser for any two objectives (ParetoFront)
 - JSON audit trail for FCA regulatory evidence
 
 The ``demand`` subpackage (``insurance_optimise.demand``) is the full demand
@@ -100,6 +101,23 @@ at the given Pearson correlation rho:
 >>> result = result.select(method='topsis', weights=(0.5, 0.3, 0.2))
 >>> print(result.selected)
 
+Bi-objective Pareto front visualiser
+-------------------------------------
+>>> from insurance_optimise import ParetoFront
+>>> profits = np.array([10_000, 11_500, 12_000, 13_000, 11_000])
+>>> disparity = np.array([1.10, 1.25, 1.40, 1.60, 1.20])
+>>> pf = ParetoFront(
+...     obj1=profits,
+...     obj2=disparity,
+...     maximize1=True,
+...     maximize2=False,
+...     obj1_name="Profit (GBP)",
+...     obj2_name="Fairness Disparity Ratio",
+... )
+>>> ax = pf.plot()
+>>> summary = pf.summary()
+>>> print(summary)
+
 References
 ----------
 - FCA PS21/11 (ENBP constraint): https://www.fca.org.uk/publication/policy/ps21-11.pdf
@@ -127,6 +145,7 @@ from insurance_optimise.pareto import (
     premium_disparity_ratio,
     loss_ratio_disparity,
 )
+from insurance_optimise.pareto_front import ParetoFront, ParetoFrontSummary
 from insurance_optimise.result import (
     EfficientFrontierResult,
     FrontierPoint,
@@ -147,6 +166,8 @@ __all__ = [
     "FrontierPoint",
     "ParetoFrontier",
     "ParetoResult",
+    "ParetoFront",
+    "ParetoFrontSummary",
     "premium_disparity_ratio",
     "loss_ratio_disparity",
     "LogLinearDemand",

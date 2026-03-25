@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.4.5] - 2026-03-25
+
+### Added
+- `ParetoFront`: lightweight bi-objective Pareto front visualiser in `pareto_front.py`.
+  Takes any two arrays of objective values (e.g. profit vs fairness disparity ratio),
+  computes the non-dominated subset, and provides:
+  - `plot()` — scatter of dominated vs non-dominated points with staircase frontier line;
+    returns `matplotlib.axes.Axes` for further customisation, no inline `plt.show()`
+  - `summary()` — returns `ParetoFrontSummary` dataclass with frontier points, ideal/nadir
+    points, and exact 2-objective hypervolume indicator (O(n log n) staircase algorithm)
+  - `from_optimiser()` classmethod — builds a front from a list of `OptimisationResult`
+    objects and a companion array of second-objective values
+  - `from_pareto_result()` classmethod — extracts a 2D slice from a completed `ParetoResult`
+    (e.g. visualise profit vs fairness from a 3-objective sweep without rerunning)
+- Exported `ParetoFront` and `ParetoFrontSummary` from top-level `__init__.py`.
+- Tests in `tests/test_pareto_front.py`: 35 tests covering mask logic, hypervolume,
+  construction validation, summary, plot, and both classmethods.
+
+
 ## [0.4.4] - 2026-03-23
 
 ### Fixed
@@ -45,4 +64,3 @@
 - Merge rate-optimiser: add ClaimsVarianceModel and plotting utilities
 - fix: remove stray broken line introduced by merge
 - fix: quick-start was missing data setup and polars import
-
