@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/insurance-optimise)](https://pypi.org/project/insurance-optimise/)
 [![Downloads](https://img.shields.io/pypi/dm/insurance-optimise)](https://pypi.org/project/insurance-optimise/)
 [![Python](https://img.shields.io/pypi/pyversions/insurance-optimise)](https://pypi.org/project/insurance-optimise/)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)]()
+[![Tests](https://github.com/burning-cost/insurance-optimise/actions/workflows/ci.yml/badge.svg)](https://github.com/burning-cost/insurance-optimise/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/burning-cost/burning-cost-examples/blob/main/notebooks/burning-cost-in-30-minutes.ipynb)
 
