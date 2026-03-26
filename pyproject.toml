@@ -52,10 +52,10 @@ dependencies = [
     "numpy>=1.25",
     "polars>=1.0",
     "pandas>=2.0",
-    "scikit-learn>=1.3",
-    "scipy>=1.10",
+    "scikit-learn>=1.6",
+    "scipy>=1.12",
     "statsmodels>=0.14.5",
-    "pyarrow>=12.0",
+    "pyarrow>=14.0",
 ]
 
 [project.optional-dependencies]
@@ -63,7 +63,7 @@ catboost = [
     "catboost>=1.2",
 ]
 dml = [
-    "doubleml>=0.7",
+    "doubleml>=0.11.0",
     "catboost>=1.2",
 ]
 causal = [
@@ -71,7 +71,8 @@ causal = [
     "catboost>=1.2",
 ]
 survival = [
-    "lifelines>=0.27",
+    "lifelines>=0.29,<0.30; python_version<'3.11'",
+    "lifelines>=0.30; python_version>='3.11'",
 ]
 plot = [
     "matplotlib>=3.6",
@@ -85,18 +86,12 @@ pareto = [
 ]
 all = [
     "catboost>=1.2",
-    "doubleml>=0.7",
+    "doubleml>=0.11.0",
     "econml>=0.15",
-    "lifelines>=0.27",
+    "lifelines>=0.29,<0.30; python_version<'3.11'",
+    "lifelines>=0.30; python_version>='3.11'",
     "matplotlib>=3.6",
     "joblib>=1.2",
-]
-dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
-    "matplotlib>=3.6",
-    "pyarrow>=12.0",
-    "pdoc>=14.0.0",
 ]
 
 [project.urls]
@@ -119,4 +114,8 @@ source = ["src/insurance_optimise"]
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-cov>=4.0",
+    "matplotlib>=3.6",
+    "pyarrow>=14.0",
+    "pdoc>=14.0.0",
 ]
