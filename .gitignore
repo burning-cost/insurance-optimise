@@ -9,4 +9,7 @@ build/
 .venv/
 .env
 uv.lock
-
+.coverage
+htmlcov/
+.pytest_cache/
+catboost_info/
