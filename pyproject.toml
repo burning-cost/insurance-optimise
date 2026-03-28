@@ -93,6 +93,16 @@ all = [
     "matplotlib>=3.6",
     "joblib>=1.2",
 ]
+# dev extra mirrors [dependency-groups].dev so that `pip install -e ".[dev]"`
+# works in CI environments that use pip (e.g. GitHub Actions) rather than uv.
+# [dependency-groups] is PEP 735 and is only recognised by uv, not by pip.
+dev = [
+    "pytest>=9.0.2",
+    "pytest-cov>=4.0",
+    "matplotlib>=3.6",
+    "pyarrow>=14.0",
+    "pdoc>=14.0.0",
+]
 
 [project.urls]
 Homepage = "https://burning-cost.github.io/insurance-optimise"
