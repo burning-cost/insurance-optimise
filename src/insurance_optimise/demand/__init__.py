@@ -17,6 +17,8 @@ inertia estimates to justify surcharging.
 This library covers:
 - ConversionModel: P(buy | price, features) for new business quotes
 - RetentionModel: P(renew | features, price_change) for existing customers
+- RiskInformedRetentionModel: RetentionModel extended with loading_ratio,
+  enbp_proximity, and claims features (Boonkrong et al. 2025)
 - ElasticityEstimator: DML-based causal price elasticity from observational data
 - DemandCurve: price → demand probability curves with multiple functional forms
 - OptimalPrice: simple constrained price optimisation for a single segment
@@ -25,6 +27,7 @@ This library covers:
 Usage
 -----
     from insurance_demand import ConversionModel, RetentionModel
+    from insurance_demand import RiskInformedRetentionModel
     from insurance_demand import ElasticityEstimator, DemandCurve, OptimalPrice
     from insurance_demand.compliance import ENBPChecker
     from insurance_demand.datasets import generate_conversion_data, generate_retention_data
@@ -56,6 +59,7 @@ except PackageNotFoundError:
 
 from .conversion import ConversionModel
 from .retention import RetentionModel
+from .risk_informed import RiskInformedRetentionModel
 from .elasticity import ElasticityEstimator
 from .demand_curve import DemandCurve
 from .optimiser import OptimalPrice, OptimisationResult
@@ -63,6 +67,7 @@ from .optimiser import OptimalPrice, OptimisationResult
 __all__ = [
     "ConversionModel",
     "RetentionModel",
+    "RiskInformedRetentionModel",
     "ElasticityEstimator",
     "DemandCurve",
     "OptimalPrice",
