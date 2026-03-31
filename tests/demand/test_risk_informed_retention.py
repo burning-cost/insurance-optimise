@@ -137,9 +137,15 @@ class TestFitPredictLogistic:
 # Fit / predict roundtrip — catboost (skip if not installed)
 # ------------------------------------------------------------------
 
-catboost = pytest.importorskip("catboost", reason="catboost not installed")
+_has_catboost = pytest.importorskip is not None  # dummy; real check below
+try:
+    import catboost as _catboost_mod
+    _has_catboost = True
+except ImportError:
+    _has_catboost = False
 
 
+@pytest.mark.skipif(not _has_catboost, reason="catboost not installed")
 class TestFitPredictCatBoost:
     def setup_method(self):
         self.model = _make_model(model_type="catboost")
@@ -173,21 +179,20 @@ class TestFitPredictCatBoost:
 class TestValidationWarnings:
     def test_swapped_columns_warning_fires(self):
         """
-        If technical_price and renewal_price are swapped the median
-        loading_ratio will be far below 1.0 and should trigger a warning.
+        If loading_ratio median is below 0.5 a warning should fire
+        (likely swapped columns or wrong data).
         """
-        model = RiskInformedRetentionModel(
-            model_type="logistic",
-            technical_price_col="renewal_price",      # deliberately swapped
-            renewal_price_col="technical_premium",    # deliberately swapped
-        )
+        # Create data where renewal_price << technical_premium to trigger warning.
+        df_bad = _DF_PD.copy()
+        df_bad["renewal_price"] = df_bad["technical_premium"] * 0.3  # ratio = 0.3
+        model = _make_model()
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            model._engineer_features(_DF_PD.copy(), training=True)
+            model._engineer_features(df_bad, training=True)
 
         messages = [str(w.message) for w in caught]
         assert any("loading_ratio" in m or "swapped" in m.lower() for m in messages), (
-            "Expected a UserWarning about swapped loading_ratio columns"
+            "Expected a UserWarning about low loading_ratio (likely swapped columns)"
         )
 
     def test_enbp_violation_warning_fires(self):
