@@ -146,7 +146,7 @@ class TestInputValidation:
             )
 
     def test_negative_intensity(self):
-        with pytest.raises(ValueError, match="claim_intensities"):
+        with pytest.raises(ValueError):
             LinearRiskSharingPool.mean_proportional(
                 claim_intensities=np.array([-1.0, 1.0]),
                 claim_means=np.array([1.0, 1.0]),

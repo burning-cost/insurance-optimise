@@ -320,14 +320,15 @@ def _effective_pooled_process(
     expected_claims_i = float(
         np.sum(allocation_matrix[i, :] * claim_intensities * claim_means)
     )
-    # Total event rate hitting i (superposition)
-    total_rate = float(np.sum(claim_intensities))  # all events hit i (at diff fractions)
+    # Total event rate hitting i: only count sources where a_{i,j} > 0
+    # (zero-allocation sources contribute nothing to i's surplus)
+    active = allocation_matrix[i, :] > 1e-15
+    lam_eff = float(np.sum(claim_intensities[active]))
     # Effective mean per event
-    if total_rate > 1e-15:
-        b_eff = expected_claims_i / total_rate
+    if lam_eff > 1e-15:
+        b_eff = expected_claims_i / lam_eff
     else:
         b_eff = 0.0
-    lam_eff = total_rate  # Rate of events; each brings a_{i,j}*Y_j to i
     c_i = float(
         (1.0 + safety_loadings[i]) * claim_intensities[i] * claim_means[i]
     )
@@ -495,6 +496,10 @@ class LinearRiskSharingPool:
         """
         claim_intensities = np.asarray(claim_intensities, dtype=float)
         claim_means = np.asarray(claim_means, dtype=float)
+        if np.any(claim_intensities <= 0):
+            raise ValueError("All claim_intensities must be positive.")
+        if np.any(claim_means <= 0):
+            raise ValueError("All claim_means must be positive.")
         n = len(claim_intensities)
         volumes = claim_intensities * claim_means  # lambda_i * b_i
         total_volume = np.sum(volumes)
