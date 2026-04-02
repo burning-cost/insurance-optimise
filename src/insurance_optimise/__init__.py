@@ -15,7 +15,7 @@ modelling suite absorbed from insurance-demand:
 - ConversionModel: P(buy | price, features) for new business quotes
 - RetentionModel: P(renew | features, price_change) for existing customers
 - ElasticityEstimator: DML-based causal price elasticity from observational data
-- DemandCurve: price → demand probability curves
+- DemandCurve: price => demand probability curves
 - ENBPChecker: PS21/11 compliance diagnostic
 
 The ``model_quality`` module (Hedges 2025, arXiv:2512.03242) provides:
@@ -28,6 +28,21 @@ The ``reinsurance`` module (Boonen, Dela Vega, Garces 2026, arXiv:2603.25350) pr
 - Closed-form ODE shooting for symmetric lines (identical parameters)
 - Numerical PDE value iteration for asymmetric multi-line cases
 - Sensitivity analysis for ambiguity and reinsurance loading parameters
+
+The ``risk_sharing`` module (Denuit, Flores-Contró, Robert 2026, arXiv:2603.29530) provides:
+- LinearRiskSharingPool: n-participant community insurance pool with allocation matrix
+- Mean-proportional allocation rule (auditable, FCA-friendly)
+- Exact Cramér-Lundberg ruin probabilities (exponential severity)
+- Event-driven Monte Carlo simulation of surplus paths
+- SLSQP optimisation of the allocation matrix (min_max_ruin / max_min_improvement)
+- JSON audit trail for regulatory documentation
+
+The ``convex_reinsurance`` module (Shyamalkumar & Wang 2026, arXiv:2603.00813) provides:
+- ConvexRiskReinsuranceOptimiser: optimal multi-line treaty design via convex duality
+- Closed-form CVaR and variance solutions (Theorems 2 and 3)
+- Bisection on Lagrange multiplier + fixed-point iteration for the variance case
+- Efficient frontier: (ceded_premium, retained_risk) Pareto front
+- Sensitivity analysis on budget, confidence level, and per-line loadings
 
 Typical workflow
 ----------------
@@ -135,14 +150,6 @@ Robust reinsurance optimisation
 >>> sched = result.cession_schedule
 >>> sens = opt.sensitivity(param='ambiguity', n_points=10)
 
-The ``risk_sharing`` module (Denuit, Flores-Contró, Robert 2026, arXiv:2603.29530) provides:
-- LinearRiskSharingPool: n-participant community insurance pool with allocation matrix
-- Mean-proportional allocation rule (auditable, FCA-friendly)
-- Exact Cramér-Lundberg ruin probabilities (exponential severity)
-- Event-driven Monte Carlo simulation of surplus paths
-- SLSQP optimisation of the allocation matrix (min_max_ruin / max_min_improvement)
-- JSON audit trail for regulatory documentation
-
 Linear risk sharing
 --------------------
 >>> from insurance_optimise import LinearRiskSharingPool
@@ -156,6 +163,20 @@ Linear risk sharing
 >>> ruin = pool.ruin_comparison()
 >>> print(ruin.improvement)  # positive = pool reduced ruin probability
 
+Convex reinsurance optimisation (De Finetti problem)
+------------------------------------------------------
+>>> from insurance_optimise import ConvexRiskReinsuranceOptimiser, RiskLine
+>>> risks = [
+...     RiskLine(name="motor",    expected_loss=5_000, variance=8_000_000, safety_loading=0.15),
+...     RiskLine(name="property", expected_loss=3_000, variance=4_000_000, safety_loading=0.22),
+...     RiskLine(name="liability",expected_loss=1_500, variance=2_500_000, safety_loading=0.30),
+... ]
+>>> opt = ConvexRiskReinsuranceOptimiser(risks=risks, risk_measure='cvar', alpha=0.995, budget=12_000)
+>>> result = opt.optimise()
+>>> print(result)
+>>> frontier = opt.frontier(n_points=30)
+>>> sens = opt.sensitivity('budget', [10_000, 11_000, 12_000, 13_000, 14_000])
+
 References
 ----------
 - FCA PS21/11 (ENBP constraint): https://www.fca.org.uk/publication/policy/ps21-11.pdf
@@ -165,6 +186,7 @@ References
 - Hedges (2025): model quality and loss ratio; arXiv:2512.03242
 - Boonen, Dela Vega, Garces (2026): robust dividend-reinsurance; arXiv:2603.25350
 - Denuit, Flores-Contró, Robert (2026): linear risk sharing; arXiv:2603.29530
+- Shyamalkumar & Wang (2026): convex reinsurance optimisation; arXiv:2603.00813
 """
 
 from importlib.metadata import version, PackageNotFoundError
@@ -176,6 +198,11 @@ except PackageNotFoundError:
 
 from insurance_optimise.constraints import ConstraintConfig
 from insurance_optimise._demand_model import LogLinearDemand, LogisticDemand, make_demand_model
+from insurance_optimise.convex_reinsurance import (
+    ConvexReinsuranceResult,
+    ConvexRiskReinsuranceOptimiser,
+    RiskLine,
+)
 from insurance_optimise.frontier import EfficientFrontier
 from insurance_optimise.model_quality import ModelQualityReport, model_quality_report
 from insurance_optimise.optimiser import PortfolioOptimiser
@@ -237,6 +264,9 @@ __all__ = [
     "SimulationResult",
     "ValidationResult",
     "PerformanceWarning",
+    "ConvexRiskReinsuranceOptimiser",
+    "ConvexReinsuranceResult",
+    "RiskLine",
     "demand",
     "__version__",
 ]

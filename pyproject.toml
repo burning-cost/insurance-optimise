@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "insurance-optimise"
-version = "0.6.0"
-description = "Constrained portfolio rate optimisation for UK personal lines insurance, with FCA ENBP enforcement, demand-linked objectives, efficient frontier, 3-objective Pareto surface with fairness, model quality LR adjustment, and robust multi-line reinsurance optimisation"
+version = "0.7.0"
+description = "Constrained portfolio rate optimisation for UK personal lines insurance, with FCA ENBP enforcement, demand-linked objectives, efficient frontier, 3-objective Pareto surface with fairness, model quality LR adjustment, robust multi-line reinsurance, linear risk sharing pools, and convex De Finetti reinsurance design"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -45,6 +45,11 @@ keywords = [
     "ruin probability",
     "Cramer-Lundberg",
     "allocation matrix",
+    "cvar",
+    "convex duality",
+    "de finetti",
+    "stop-loss",
+    "treaty",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
