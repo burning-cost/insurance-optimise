@@ -43,11 +43,9 @@ For each risk i (ordered by loading beta_i, ascending):
 - If beta_i < K: R_i* = (S - sum_{j < i} X_j - q)_+ wedge X_i
 - If beta_i >= K: R_i* = 0  (too expensive to cede)
 
-where q in [0, VaR_alpha(S)] is determined by the subdifferential condition:
-E[R_i* ] = (CVaR_alpha(S) - q - sum_{j<i} E[X_j restricted to tail]) / n_active.
-
-In practice q is solved by bisection on the constraint that CVaR_alpha of the
-retained aggregate sum_i (X_i - R_i*) equals the budget c.
+where q in [0, VaR_alpha(S)] is a single global threshold determined by the
+CVaR constraint: CVaR_alpha(retained aggregate) = budget. We solve for q by
+bisection. lambda_star is then recovered from the dual variable.
 
 Usage
 -----
@@ -499,12 +497,19 @@ class ConvexRiskReinsuranceOptimiser:
 
     def _solve_cvar(self) -> ConvexReinsuranceResult:
         """
-        Solve via Theorem 3. Bisect on lambda until CVaR(retained) = budget.
+        Solve via Theorem 3. Bisect on q (the stop-loss threshold) until
+        CVaR_alpha(retained) = budget.
 
-        The structure: given lambda, K = lambda / (1 - alpha). Risks with
-        beta_i < K are ceded (piecewise stop-loss on tail of S). Risks with
-        beta_i >= K are not ceded. Within the active set, the threshold q is
-        chosen so that CVaR_alpha of retained aggregate equals the budget.
+        For a given q in [0, VaR_alpha(S)], the optimal contracts are:
+
+            R_i* = (S - sum_{j < i} X_j - q)_+ wedge X_i  (loading order)
+
+        This structure is layered: the cheapest risk cedes the first layer
+        above q, the next risk cedes the next layer, etc. As q increases, less
+        is ceded and retained CVaR increases. We bisect on q to hit the budget.
+
+        The Lagrange multiplier lambda_star is recovered post-hoc as the
+        shadow price of the budget constraint.
         """
         assert self.budget is not None
 
@@ -526,122 +531,152 @@ class ConvexRiskReinsuranceOptimiser:
                 "eliminate more risk than exists."
             )
 
+        var_alpha = float(np.quantile(S, self.alpha))
+
         audit: dict[str, Any] = {
             "solver": "cvar_bisection",
             "alpha": self.alpha,
             "full_retained_risk": float(full_retained_risk),
             "budget": budget,
             "bisect_iterations": 0,
+            "var_alpha_S": var_alpha,
+            "cvar_alpha_S": float(full_retained_risk),
         }
 
-        # Find lambda* by bisection: risk(lambda) is decreasing in lambda
-        # At lambda=0, K=0 => all risks active => minimum retained risk
-        # At lambda=large, K=large => no risks active => full retained risk
-        lambda_lo, lambda_hi = self._bracket_lambda_cvar(S, budget)
-        audit["lambda_bracket"] = [float(lambda_lo), float(lambda_hi)]
+        # At q=0: maximum cession, retained CVaR is minimised
+        # At q=var_alpha: (S - var_alpha)_+ captures only extreme tail,
+        #   retained CVaR approaches full_retained_risk
+        # We bisect on q to find CVaR(retained(q)) = budget.
+        # f(q) = CVaR(retained(q)) - budget
+        # f(0) <= 0 (too much cession, retained CVaR <= budget or == min)
+        # f(q_hi) >= 0 (too little cession)
 
-        def retained_risk_at_lambda(lam: float) -> float:
-            contracts = self._cvar_contracts(lam, S)
+        def retained_cvar_at_q(q: float) -> float:
+            contracts = self._cvar_contracts_at_q(q, S)
             retained = self._retained_samples(contracts, S)
             return float(self._compute_risk_measure(retained)) - budget
 
-        lam_star, r_info = brentq(
-            retained_risk_at_lambda,
-            lambda_lo,
-            lambda_hi,
+        # Check that q=0 gives sufficient cession (f(0) <= 0)
+        f_at_0 = retained_cvar_at_q(0.0)
+        audit["f_at_q0"] = float(f_at_0)
+
+        if f_at_0 > 0:
+            # Even full cession doesn't meet the budget — infeasible
+            raise ValueError(
+                f"Budget {budget:.2f} is infeasible: even full cession cannot reduce "
+                f"retained CVaR below {f_at_0 + budget:.2f}."
+            )
+
+        # Find q_hi where retained CVaR >= budget
+        # Start above var_alpha and shrink, or use var_alpha directly
+        q_hi = var_alpha
+        f_at_qhi = retained_cvar_at_q(q_hi)
+        audit["f_at_qhi_initial"] = float(f_at_qhi)
+
+        # If VaR itself doesn't give enough retention, extend q_hi further
+        # (q > VaR_alpha means even less is ceded from the tail)
+        if f_at_qhi < 0:
+            # Need larger q to reduce cession
+            q_hi = var_alpha * 1.5
+            for _ in range(60):
+                f_at_qhi = retained_cvar_at_q(q_hi)
+                if f_at_qhi >= 0:
+                    break
+                q_hi = q_hi + var_alpha * 0.5
+            else:
+                # Fallback: q_hi = max(S) gives essentially no cession
+                q_hi = float(np.max(S))
+                f_at_qhi = retained_cvar_at_q(q_hi)
+
+        audit["q_bracket"] = [0.0, float(q_hi)]
+        audit["f_bracket"] = [float(f_at_0), float(f_at_qhi)]
+
+        # Bisect on q in [0, q_hi]
+        q_star, r_info = brentq(
+            retained_cvar_at_q,
+            0.0,
+            q_hi,
             xtol=self.tol,
-            rtol=self.tol,
+            rtol=self.tol * 1e3,  # relative tolerance: budget-scale
             full_output=True,
         )
         audit["bisect_iterations"] = r_info.iterations
-        audit["lambda_star"] = float(lam_star)
+        audit["q_star"] = float(q_star)
 
-        # Final contracts at lambda*
-        contracts_raw = self._cvar_contracts(lam_star, S)
+        # Final contracts at q_star
+        contracts_raw = self._cvar_contracts_at_q(q_star, S)
         retained = self._retained_samples(contracts_raw, S)
         retained_risk_val = float(self._compute_risk_measure(retained))
 
         contracts_out = self._format_contracts(contracts_raw, S)
         total_ceded_premium = sum(c["ceded_premium"] for c in contracts_out)
 
+        # Recover lambda_star: from the KKT conditions, lambda_star is the
+        # marginal cost of tightening the budget. For CVaR, the dual variable
+        # is approximately beta_last_active * (1 - alpha) where beta_last_active
+        # is the highest loading among lines that actually cede something.
+        # For a continuous problem, lambda_star = K * (1 - alpha) where K is the
+        # price at which the marginal risk is indifferent between ceding and not.
+        active_betas = [
+            c["beta"] for c in contracts_raw if c["expected_ceded"] > self.tol
+        ]
+        if active_betas:
+            lambda_star = float(max(active_betas)) * (1.0 - self.alpha)
+        else:
+            lambda_star = 0.0
+
+        audit["lambda_star"] = float(lambda_star)
+        audit["K_threshold"] = float(lambda_star / (1.0 - self.alpha)) if lambda_star > 0 else 0.0
         audit["n_lines_ceded"] = sum(1 for c in contracts_out if c["ceded"])
-        audit["K_threshold"] = float(lam_star / (1.0 - self.alpha))
-        audit["var_alpha_S"] = float(np.quantile(S, self.alpha))
-        audit["cvar_alpha_S"] = float(self._compute_risk_measure(S))
 
         return ConvexReinsuranceResult(
             contracts=contracts_out,
-            lambda_star=float(lam_star),
+            lambda_star=float(lambda_star),
             total_ceded_premium=float(total_ceded_premium),
             retained_risk=retained_risk_val,
             risk_measure_value=retained_risk_val,
             audit=audit,
         )
 
-    def _cvar_contracts(
-        self, lambda_val: float, S: np.ndarray
+    def _cvar_contracts_at_q(
+        self, q: float, S: np.ndarray
     ) -> list[dict[str, Any]]:
         """
-        Compute R_i* for each risk using Theorem 3 of Shyamalkumar & Wang (2026).
+        Compute R_i* for each risk using Theorem 3 with a given threshold q.
 
-        K = lambda / (1 - alpha). Risks with beta_i < K are active (ceded);
-        those with beta_i >= K are not ceded. Within the active set, risks are
-        ordered by ascending loading and each has its own stop-loss threshold
-        determined by the cumulative sum of previously-ceded losses.
+        For all risks in ascending loading order:
+            R_i* = (S - sum_{j < i} X_j - q)_+ wedge X_i
+
+        This is the layered stop-loss structure: the cheapest risk cedes the
+        first excess layer above q; the next cheapest cedes the next layer, etc.
+        The total ceded is bounded by (S - q)_+.
 
         Parameters
         ----------
-        lambda_val:
-            Current value of the Lagrange multiplier.
+        q:
+            Stop-loss threshold. q=0 gives maximum cession (retain only losses
+            below q); q=VaR_alpha(S) gives minimal cession (only extreme tail).
         S:
             Aggregate loss samples (n_sim,).
 
         Returns
         -------
-        List of dicts with keys: index (original), name, beta, ceded,
+        List of dicts with keys: orig_idx, name, beta, ceded,
         expected_ceded, raw_ceded_samples.
         """
-        K = lambda_val / (1.0 - self.alpha)
-        var_alpha = float(np.quantile(S, self.alpha))
-
-        # Work in loading order (self._sorted_risks already sorted ascending)
         contracts: list[dict[str, Any]] = []
-        cumulative_samples = np.zeros(len(S))
+        # Track the cumulative sum of X_j already "allocated" to previous layers
+        # (not the ceded amount, but the full X_j capacity used)
+        cumulative_capacity = np.zeros(len(S))
 
         for sorted_idx, risk in enumerate(self._sorted_risks):
             orig_idx = self._order[sorted_idx]
             x_i = self._samples[:, orig_idx]
 
-            if risk.safety_loading >= K:
-                # Too expensive — no cession
-                contracts.append({
-                    "sorted_idx": sorted_idx,
-                    "orig_idx": orig_idx,
-                    "name": risk.name,
-                    "beta": risk.safety_loading,
-                    "ceded": False,
-                    "expected_ceded": 0.0,
-                    "raw_ceded_samples": np.zeros(len(S)),
-                })
-                continue
-
-            # Active risk: R_i* = (S - cumulative - q)_+ wedge x_i
-            # Find q by bisection on CVaR constraint for this layer
-            # q in [0, var_alpha]: at q=0 maximum cession; at q=var_alpha near-zero
-            def _ceded_at_q(q: float) -> np.ndarray:
-                layer = np.maximum(S - cumulative_samples - q, 0.0)
-                return np.minimum(layer, x_i)
-
-            # We don't re-solve q per-line; instead the bisection on lambda_val
-            # (in _solve_cvar) implicitly sets the correct level. Here we use
-            # q = var_alpha(S - cumulative) as the canonical threshold matching
-            # the subdifferential condition from the paper.
-            q_layer = float(np.quantile(S - cumulative_samples, self.alpha))
-            q_layer = max(0.0, q_layer)
-
-            ceded_samples = _ceded_at_q(q_layer)
+            # Layer: (S - cumulative_capacity - q)_+ capped at x_i
+            layer = np.maximum(S - cumulative_capacity - q, 0.0)
+            ceded_samples = np.minimum(layer, x_i)
             expected_ceded = float(np.mean(ceded_samples))
-            cumulative_samples = cumulative_samples + ceded_samples
 
             contracts.append({
                 "sorted_idx": sorted_idx,
@@ -652,6 +687,10 @@ class ConvexRiskReinsuranceOptimiser:
                 "expected_ceded": expected_ceded,
                 "raw_ceded_samples": ceded_samples,
             })
+
+            # The capacity allocated to this risk is x_i (whether or not fully ceded)
+            # so the next risk's layer starts above cumulative_capacity + x_i
+            cumulative_capacity = cumulative_capacity + x_i
 
         return contracts
 
@@ -837,66 +876,30 @@ class ConvexRiskReinsuranceOptimiser:
     # Bracketing helpers
     # -----------------------------------------------------------------------
 
-    def _bracket_lambda_cvar(
-        self, S: np.ndarray, budget: float
-    ) -> tuple[float, float]:
-        """
-        Find [lambda_lo, lambda_hi] such that:
-        - At lambda_lo: retained CVaR < budget (too much cession)
-        - At lambda_hi: retained CVaR > budget (too little cession)
-
-        We use the fact that retained CVaR is increasing in lambda.
-        """
-        # Start with a small lambda (lots of cession) and grow
-        min_beta = min(r.safety_loading for r in self.risks)
-        lambda_lo = self.tol  # near-zero => K near 0 => all risks active
-
-        # Check that lambda_lo gives sufficient cession
-        contracts_lo = self._cvar_contracts(lambda_lo, S)
-        retained_lo = self._retained_samples(contracts_lo, S)
-        risk_lo = float(self._compute_risk_measure(retained_lo))
-        if risk_lo > budget:
-            # Even max cession not enough — the problem may be infeasible but
-            # brentq will handle it gracefully
-            lambda_lo = self.tol
-
-        # Find lambda_hi large enough that no cession occurs
-        # K = lambda / (1 - alpha) > max(beta) => no cession
-        max_beta = max(r.safety_loading for r in self.risks)
-        lambda_hi = max_beta * (1.0 - self.alpha) * 10.0  # well above threshold
-
-        contracts_hi = self._cvar_contracts(lambda_hi, S)
-        retained_hi = self._retained_samples(contracts_hi, S)
-        risk_hi = float(self._compute_risk_measure(retained_hi))
-
-        # Expand if needed
-        for _ in range(50):
-            if risk_hi >= budget:
-                break
-            lambda_hi *= 2.0
-            contracts_hi = self._cvar_contracts(lambda_hi, S)
-            retained_hi = self._retained_samples(contracts_hi, S)
-            risk_hi = float(self._compute_risk_measure(retained_hi))
-
-        return float(lambda_lo), float(lambda_hi)
-
     def _bracket_lambda_variance(
         self, S: np.ndarray, budget: float
     ) -> tuple[float, float]:
         """
-        Find [lambda_lo, lambda_hi] such that Var(retained) brackets budget.
-        Var(retained) is increasing in lambda.
+        Find [lambda_lo, lambda_hi] such that:
+        - f(lambda_lo) = Var(retained) - budget > 0  (little cession at small lambda)
+        - f(lambda_hi) = Var(retained) - budget < 0  (lots of cession at large lambda)
+
+        Var(retained) is decreasing in lambda (higher lambda => tighter constraint =>
+        more cession => lower variance). We find lambda_hi by doubling from 1.0
+        until we observe sufficient cession (retained variance drops below budget).
         """
         lambda_lo = self.tol
 
-        # Find lambda_hi where near-zero cession
+        # Find lambda_hi where retained variance < budget (f < 0)
+        # Start at 1.0 and double until sufficient cession is achieved.
         lambda_hi = 1.0
-        for _ in range(50):
+        for _ in range(60):
             sigma = self._fixed_point_sigma(lambda_hi, S)
             contracts = self._variance_contracts(lambda_hi, sigma, S)
             retained = self._retained_samples(contracts, S)
             var_hi = float(np.var(retained, ddof=0))
-            if var_hi >= budget:
+            if var_hi < budget:
+                # Found: f(lambda_hi) = var_hi - budget < 0
                 break
             lambda_hi *= 2.0
 
