@@ -412,6 +412,40 @@ Commercial tools (Akur8, WTW Radar, Earnix) do not expose their optimisation met
 
 - **No multi-period optimisation.** The optimiser solves a single-period problem: what multiplier maximises expected profit over the upcoming renewal cycle? It does not account for the dynamic consequences of pricing decisions — customer tenure effects, NCD accumulation, adverse selection at extreme prices, or competitor response. A policy that maximises single-period profit by raising prices sharply may erode the long-term book quality through selective lapse of good risks. Multi-period pricing optimisation is a materially harder problem outside the scope of this library.
 
+## ConvexRiskReinsuranceOptimiser
+
+`ConvexRiskReinsuranceOptimiser` solves the De Finetti problem: find admissible cession functions R_i (one per risk line) that minimise total ceded premium Σ βᵢ·E[Rᵢ] subject to a risk measure constraint on the retained aggregate loss. The solution comes from Shyamalkumar & Wang (arXiv:2603.00813), who show that the optimal contracts have a closed form via convex duality — no numerical optimisation beyond bisection on a single scalar is required.
+
+The CVaR case (default, α=0.995) yields a layered stop-loss structure: the cheapest line cedes the first layer above a threshold q, the next cheapest cedes the next layer, and so on. The threshold q is found by bisection so that CVaR of the retained portfolio equals the budget.
+
+```python
+import numpy as np
+from insurance_optimise import ConvexRiskReinsuranceOptimiser, RiskLine
+
+risks = [
+    RiskLine(name="motor",    expected_loss=5_000, variance=8_000_000, safety_loading=0.15),
+    RiskLine(name="property", expected_loss=3_000, variance=4_000_000, safety_loading=0.22),
+    RiskLine(name="liability",expected_loss=1_500, variance=2_500_000, safety_loading=0.30),
+]
+rng = np.random.default_rng(0)
+samples = rng.lognormal(mean=[8.5, 8.0, 7.3], sigma=0.4, size=(50_000, 3))
+
+opt = ConvexRiskReinsuranceOptimiser(
+    risks=risks,
+    risk_measure="cvar",
+    alpha=0.995,           # 1-in-200 year, aligns with Solvency II SCR
+    budget=12_000,         # CVaR of retained aggregate <= £12k
+    aggregate_loss_samples=samples,
+)
+result = opt.optimise()
+print(result)            # per-line ceded premium, retained CVaR, lambda*
+print(result.summary())  # Polars DataFrame with cession rates
+
+frontier = opt.frontier(n_points=30)  # Pareto front: ceded premium vs retained CVaR
+```
+
+---
+
 ## Related Libraries
 
 | Library | Description |
