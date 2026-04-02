@@ -266,6 +266,7 @@ class ConvexRiskReinsuranceOptimiser:
         n_sim: int = 50_000,
         tol: float = 1e-6,
         max_iter: int = 200,
+        random_state: int | np.random.Generator | None = None,
     ) -> None:
         if not risks:
             raise ValueError(
@@ -287,6 +288,7 @@ class ConvexRiskReinsuranceOptimiser:
         self.tol = tol
         self.max_iter = max_iter
         self._n_sim = n_sim
+        self.random_state = random_state
 
         n = len(risks)
         self._n = n
@@ -381,23 +383,24 @@ class ConvexRiskReinsuranceOptimiser:
 
         rows = []
         orig_budget = self.budget
-        for c in budgets:
-            self.budget = float(c)
-            try:
-                res = self.optimise()
-                row: dict[str, Any] = {
-                    "budget": c,
-                    "total_ceded_premium": res.total_ceded_premium,
-                    "retained_risk": res.retained_risk,
-                    "n_lines_ceded": sum(1 for ct in res.contracts if ct["ceded"]),
-                }
-                for ct in res.contracts:
-                    row[f"ceded_premium_{ct['name']}"] = ct["ceded_premium"]
-                rows.append(row)
-            except Exception:
-                pass  # skip infeasible points silently
-
-        self.budget = orig_budget
+        try:
+            for c in budgets:
+                self.budget = float(c)
+                try:
+                    res = self.optimise()
+                    row: dict[str, Any] = {
+                        "budget": c,
+                        "total_ceded_premium": res.total_ceded_premium,
+                        "retained_risk": res.retained_risk,
+                        "n_lines_ceded": sum(1 for ct in res.contracts if ct["ceded"]),
+                    }
+                    for ct in res.contracts:
+                        row[f"ceded_premium_{ct['name']}"] = ct["ceded_premium"]
+                    rows.append(row)
+                except Exception:
+                    pass  # skip infeasible points silently
+        finally:
+            self.budget = orig_budget
         return pl.DataFrame(rows)
 
     def sensitivity(self, param: str, values: list[float]) -> pl.DataFrame:
@@ -436,58 +439,59 @@ class ConvexRiskReinsuranceOptimiser:
         orig_risks = self.risks
 
         rows = []
-        for v in values:
-            try:
-                if param == "budget":
-                    self.budget = float(v)
-                elif param == "alpha":
-                    self.alpha = float(v)
-                elif param.startswith("loading_"):
-                    line_name = param[len("loading_"):]
-                    new_risks = []
-                    for r in self.risks:
-                        if r.name == line_name:
-                            new_risks.append(
-                                RiskLine(
-                                    name=r.name,
-                                    expected_loss=r.expected_loss,
-                                    variance=r.variance,
-                                    safety_loading=float(v),
+        try:
+            for v in values:
+                try:
+                    if param == "budget":
+                        self.budget = float(v)
+                    elif param == "alpha":
+                        self.alpha = float(v)
+                    elif param.startswith("loading_"):
+                        line_name = param[len("loading_"):]
+                        new_risks = []
+                        for r in self.risks:
+                            if r.name == line_name:
+                                new_risks.append(
+                                    RiskLine(
+                                        name=r.name,
+                                        expected_loss=r.expected_loss,
+                                        variance=r.variance,
+                                        safety_loading=float(v),
+                                    )
                                 )
-                            )
-                        else:
-                            new_risks.append(r)
-                    self.risks = new_risks
-                    self._n = len(new_risks)
-                    self._order = sorted(
-                        range(self._n), key=lambda i: new_risks[i].safety_loading
-                    )
-                    self._sorted_risks = [new_risks[i] for i in self._order]
+                            else:
+                                new_risks.append(r)
+                        self.risks = new_risks
+                        self._n = len(new_risks)
+                        self._order = sorted(
+                            range(self._n), key=lambda i: new_risks[i].safety_loading
+                        )
+                        self._sorted_risks = [new_risks[i] for i in self._order]
 
-                res = self.optimise()
-                rows.append({
-                    "param_value": v,
-                    "total_ceded_premium": res.total_ceded_premium,
-                    "retained_risk": res.retained_risk,
-                    "n_lines_ceded": sum(1 for ct in res.contracts if ct["ceded"]),
-                    "lambda_star": res.lambda_star,
-                })
-            except Exception:
-                rows.append({
-                    "param_value": v,
-                    "total_ceded_premium": float("nan"),
-                    "retained_risk": float("nan"),
-                    "n_lines_ceded": 0,
-                    "lambda_star": float("nan"),
-                })
-
-        # Restore state
-        self.budget = orig_budget
-        self.alpha = orig_alpha
-        self.risks = orig_risks
-        self._n = len(orig_risks)
-        self._order = sorted(range(self._n), key=lambda i: orig_risks[i].safety_loading)
-        self._sorted_risks = [orig_risks[i] for i in self._order]
+                    res = self.optimise()
+                    rows.append({
+                        "param_value": v,
+                        "total_ceded_premium": res.total_ceded_premium,
+                        "retained_risk": res.retained_risk,
+                        "n_lines_ceded": sum(1 for ct in res.contracts if ct["ceded"]),
+                        "lambda_star": res.lambda_star,
+                    })
+                except Exception:
+                    rows.append({
+                        "param_value": v,
+                        "total_ceded_premium": float("nan"),
+                        "retained_risk": float("nan"),
+                        "n_lines_ceded": 0,
+                        "lambda_star": float("nan"),
+                    })
+        finally:
+            # Always restore state, even if an unexpected exception escapes the loop
+            self.budget = orig_budget
+            self.alpha = orig_alpha
+            self.risks = orig_risks
+            self._n = len(orig_risks)
+            self._order = sorted(range(self._n), key=lambda i: orig_risks[i].safety_loading)
+            self._sorted_risks = [orig_risks[i] for i in self._order]
 
         return pl.DataFrame(rows)
 
@@ -985,7 +989,7 @@ class ConvexRiskReinsuranceOptimiser:
         This is an approximation. For production use, pass pre-simulated samples
         from your collective risk model via aggregate_loss_samples.
         """
-        rng = np.random.default_rng(42)
+        rng = np.random.default_rng(self.random_state)
         means = np.array([r.expected_loss for r in self.risks], dtype=float)
         variances = np.diag(self._cov)
 

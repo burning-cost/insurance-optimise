@@ -855,3 +855,166 @@ class TestHelpers:
         corr_reg = _regularise_corr(corr)
         assert abs(corr_reg[0, 0] - 1.0) < 1e-10
         assert abs(corr_reg[1, 1] - 1.0) < 1e-10
+
+
+# ---------------------------------------------------------------------------
+# Regression: try/finally state restoration and random_state
+# ---------------------------------------------------------------------------
+
+
+class TestStateMutationFix:
+    """Regression tests for the try/finally state-mutation bug.
+
+    frontier() and sensitivity() mutate self.budget (and self.alpha, self.risks)
+    in a loop. Without try/finally, an exception escaping the loop leaves the
+    object in a corrupted state. The fix wraps the loop in try/finally so the
+    original state is always restored.
+    """
+
+    def _make_optimiser(self, simple_samples, two_risks, budget_frac=0.80):
+        S = simple_samples.sum(axis=1)
+        full_cvar = _empirical_cvar(S, 0.995)
+        return ConvexRiskReinsuranceOptimiser(
+            risks=two_risks,
+            risk_measure="cvar",
+            alpha=0.995,
+            budget=full_cvar * budget_frac,
+            aggregate_loss_samples=simple_samples,
+        ), full_cvar
+
+    def test_frontier_restores_budget_after_normal_completion(
+        self, two_risks, simple_samples
+    ):
+        """budget must be unchanged after frontier() completes normally."""
+        opt, full_cvar = self._make_optimiser(simple_samples, two_risks)
+        original_budget = opt.budget
+        opt.frontier(n_points=5)
+        assert opt.budget == original_budget, (
+            f"budget changed after frontier(): {opt.budget} != {original_budget}"
+        )
+
+    def test_frontier_restores_budget_when_internal_exception_raised(
+        self, two_risks, simple_samples, monkeypatch
+    ):
+        """budget must be restored even when optimise() raises an exception mid-loop.
+
+        We monkeypatch optimise() to raise on the second call, simulating an
+        unexpected internal error that escapes the inner try/except.
+        """
+        opt, full_cvar = self._make_optimiser(simple_samples, two_risks)
+        original_budget = opt.budget
+
+        call_count = {"n": 0}
+        real_optimise = opt.optimise.__func__
+
+        def patched_optimise(self_inner):
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise RuntimeError("simulated internal failure")
+            return real_optimise(self_inner)
+
+        monkeypatch.setattr(opt.__class__, "optimise", patched_optimise)
+
+        try:
+            opt.frontier(n_points=4)
+        except RuntimeError:
+            pass  # expected
+
+        assert opt.budget == original_budget, (
+            f"budget corrupted after exception in frontier(): "
+            f"{opt.budget} != {original_budget}"
+        )
+
+    def test_sensitivity_restores_state_after_normal_completion(
+        self, two_risks, simple_samples
+    ):
+        """All mutated attributes must be unchanged after sensitivity() completes."""
+        opt, full_cvar = self._make_optimiser(simple_samples, two_risks)
+        original_budget = opt.budget
+        original_alpha = opt.alpha
+        original_risks = opt.risks
+
+        budgets = [full_cvar * f for f in [0.70, 0.75, 0.80]]
+        opt.sensitivity("budget", budgets)
+
+        assert opt.budget == original_budget
+        assert opt.alpha == original_alpha
+        assert opt.risks is original_risks
+
+    def test_sensitivity_restores_state_when_exception_raised(
+        self, two_risks, simple_samples, monkeypatch
+    ):
+        """State must be restored even when optimise() raises mid-loop."""
+        opt, full_cvar = self._make_optimiser(simple_samples, two_risks)
+        original_budget = opt.budget
+        original_alpha = opt.alpha
+        original_risks = opt.risks
+
+        call_count = {"n": 0}
+        real_optimise = opt.optimise.__func__
+
+        def patched_optimise(self_inner):
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise RuntimeError("simulated internal failure")
+            return real_optimise(self_inner)
+
+        monkeypatch.setattr(opt.__class__, "optimise", patched_optimise)
+
+        budgets = [full_cvar * f for f in [0.70, 0.75, 0.80]]
+        try:
+            opt.sensitivity("budget", budgets)
+        except RuntimeError:
+            pass  # expected
+
+        assert opt.budget == original_budget, (
+            f"budget corrupted: {opt.budget} != {original_budget}"
+        )
+        assert opt.alpha == original_alpha, (
+            f"alpha corrupted: {opt.alpha} != {original_alpha}"
+        )
+        assert opt.risks is original_risks, "risks list reference changed"
+
+
+class TestRandomState:
+    """random_state parameter controls internal simulation reproducibility."""
+
+    def test_same_random_state_gives_same_samples(self):
+        """Two optimisers with the same random_state must produce identical samples."""
+        risks = [
+            RiskLine(name="motor", expected_loss=5_000, variance=8_000_000, safety_loading=0.15),
+        ]
+        opt_a = ConvexRiskReinsuranceOptimiser(
+            risks=risks, random_state=99, n_sim=1000
+        )
+        opt_b = ConvexRiskReinsuranceOptimiser(
+            risks=risks, random_state=99, n_sim=1000
+        )
+        np.testing.assert_array_equal(
+            opt_a._samples, opt_b._samples,
+            err_msg="Same random_state must yield identical samples"
+        )
+
+    def test_different_random_states_give_different_samples(self):
+        """Two optimisers with different random_states should produce different samples."""
+        risks = [
+            RiskLine(name="motor", expected_loss=5_000, variance=8_000_000, safety_loading=0.15),
+        ]
+        opt_a = ConvexRiskReinsuranceOptimiser(
+            risks=risks, random_state=1, n_sim=1000
+        )
+        opt_b = ConvexRiskReinsuranceOptimiser(
+            risks=risks, random_state=2, n_sim=1000
+        )
+        assert not np.array_equal(opt_a._samples, opt_b._samples), (
+            "Different random_states produced identical samples — "
+            "_simulate_samples is not using self.random_state"
+        )
+
+    def test_default_random_state_is_none(self):
+        """random_state defaults to None (non-deterministic)."""
+        risks = [
+            RiskLine(name="motor", expected_loss=5_000, variance=8_000_000, safety_loading=0.15),
+        ]
+        opt = ConvexRiskReinsuranceOptimiser(risks=risks, n_sim=100)
+        assert opt.random_state is None
