@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "insurance-optimise"
-version = "0.4.5"
-description = "Constrained portfolio rate optimisation for UK personal lines insurance, with FCA ENBP enforcement, demand-linked objectives, efficient frontier, 3-objective Pareto surface with fairness, and model quality LR adjustment"
+version = "0.5.0"
+description = "Constrained portfolio rate optimisation for UK personal lines insurance, with FCA ENBP enforcement, demand-linked objectives, efficient frontier, 3-objective Pareto surface with fairness, model quality LR adjustment, and robust multi-line reinsurance optimisation"
 readme = "README.md"
 license = "MIT"
 authors = [
@@ -34,6 +34,11 @@ keywords = [
     "fairness",
     "multi-objective",
     "model quality",
+    "reinsurance",
+    "robust control",
+    "model uncertainty",
+    "cession",
+    "proportional reinsurance",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",

@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.5.0] - 2026-04-02
+
+### Added
+- `RobustReinsuranceOptimiser`: multi-line proportional cession optimisation under
+  model uncertainty, implementing Boonen, Dela Vega, Garces (2026) arXiv:2603.25350.
+  - `ReinsuranceLine` dataclass: parameters for one insurance line (mu, sigma,
+    reins_loading, ambiguity theta, correlation)
+  - `RobustReinsuranceResult` dataclass: output including dividend barrier b*,
+    per-surplus cession schedule (Polars DataFrame), audit trail, and plot method
+  - Symmetric closed-form solver (`_solve_symmetric`): ODE shooting via
+    `scipy.integrate.solve_ivp` + `scipy.optimize.brentq` for lines with identical
+    parameters; returns `solver='symmetric_closed_form'`
+  - Asymmetric numerical solver (`_solve_asymmetric`): PDE value iteration on a
+    2D grid `[0, surplus_max]^2` for two lines with different parameters; returns
+    `solver='asymmetric_pde'`
+  - `cession_at(x)`: evaluate optimal cession fraction at any surplus value(s)
+  - `sensitivity(param, n_points)`: sweep ambiguity or loading and return a Polars
+    DataFrame of cession fraction vs parameter value
+  - `to_json()` / `save_audit()`: JSON-serialisable audit trail with full parameter
+    record; consistent with `OptimisationResult.to_json()` format
+  - `plot_cession_schedule()`: matplotlib visualisation — 1D line plot for symmetric
+    case, 2D heatmap for asymmetric case; graceful degradation if matplotlib absent
+  - `force_numerical=True` flag: bypass closed-form and use PDE solver (for testing)
+- New module `src/insurance_optimise/reinsurance.py` (~380 LOC)
+- Exported `ReinsuranceLine`, `RobustReinsuranceOptimiser`, `RobustReinsuranceResult`
+  from top-level `__init__.py`
+- Tests in `tests/test_reinsurance.py`: 30 tests covering validation, closed-form
+  behaviour (theta=0 vs theta>0), monotonicity, barrier sensitivity, sensitivity
+  analysis, PDE convergence, output schema, plotting, and edge cases
+
+### Changed
+- Version bumped from 0.4.5 to 0.5.0
+- Added reinsurance-related keywords to PyPI metadata
+
+
 ## [0.4.5] - 2026-03-25
 
 ### Added

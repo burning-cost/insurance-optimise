@@ -23,6 +23,12 @@ The ``model_quality`` module (Hedges 2025, arXiv:2512.03242) provides:
 - Model quality report for pricing teams
 - Integration into ConstraintConfig via model_quality_adjusted_lr
 
+The ``reinsurance`` module (Boonen, Dela Vega, Garces 2026, arXiv:2603.25350) provides:
+- RobustReinsuranceOptimiser: multi-line proportional cession under model uncertainty
+- Closed-form ODE shooting for symmetric lines (identical parameters)
+- Numerical PDE value iteration for asymmetric multi-line cases
+- Sensitivity analysis for ambiguity and reinsurance loading parameters
+
 Typical workflow
 ----------------
 >>> import numpy as np
@@ -118,6 +124,17 @@ Bi-objective Pareto front visualiser
 >>> summary = pf.summary()
 >>> print(summary)
 
+Robust reinsurance optimisation
+---------------------------------
+>>> from insurance_optimise import RobustReinsuranceOptimiser, ReinsuranceLine
+>>> line_mot = ReinsuranceLine(name="motor", mu=2.0, sigma=3.0, reins_loading=3.5, ambiguity=0.1)
+>>> line_prop = ReinsuranceLine(name="property", mu=1.5, sigma=2.5, reins_loading=2.8, ambiguity=0.08)
+>>> opt = RobustReinsuranceOptimiser(lines=[line_mot, line_prop])
+>>> result = opt.optimise()
+>>> print(result)
+>>> sched = result.cession_schedule
+>>> sens = opt.sensitivity(param='ambiguity', n_points=10)
+
 References
 ----------
 - FCA PS21/11 (ENBP constraint): https://www.fca.org.uk/publication/policy/ps21-11.pdf
@@ -125,6 +142,7 @@ References
 - Branda (2014): stochastic LR constraint via Chebyshev
 - Emms & Haberman (2005): theoretical foundation for demand-linked pricing
 - Hedges (2025): model quality and loss ratio; arXiv:2512.03242
+- Boonen, Dela Vega, Garces (2026): robust dividend-reinsurance; arXiv:2603.25350
 """
 
 from importlib.metadata import version, PackageNotFoundError
@@ -146,6 +164,11 @@ from insurance_optimise.pareto import (
     loss_ratio_disparity,
 )
 from insurance_optimise.pareto_front import ParetoFront, ParetoFrontSummary
+from insurance_optimise.reinsurance import (
+    ReinsuranceLine,
+    RobustReinsuranceOptimiser,
+    RobustReinsuranceResult,
+)
 from insurance_optimise.result import (
     EfficientFrontierResult,
     FrontierPoint,
@@ -177,6 +200,9 @@ __all__ = [
     "ClaimsVarianceModel",
     "ModelQualityReport",
     "model_quality_report",
+    "ReinsuranceLine",
+    "RobustReinsuranceOptimiser",
+    "RobustReinsuranceResult",
     "demand",
     "__version__",
 ]
