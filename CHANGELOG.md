@@ -1,5 +1,37 @@
 # Changelog
 
+## [0.6.0] - 2026-04-02
+
+### Added
+- `LinearRiskSharingPool`: community-based insurance pool with linear allocation matrix,
+  implementing Denuit, Flores-Contró, Robert (2026), arXiv:2603.29530.
+  - `mean_proportional()` classmethod: allocation proportional to expected claim volume;
+    satisfies budget balance and actuarial fairness by construction
+  - `validate_conditions()`: checks budget balance, actuarial fairness, capacity;
+    returns `ValidationResult` with per-condition booleans and violation magnitudes
+  - `ruin_comparison()`: exact Cramér-Lundberg ruin probabilities (method='cramerlundberg',
+    exponential severity) or simulation estimate (method='simulation');
+    returns `RuinResult` with pooled, standalone, and improvement arrays
+  - `simulate()`: Gillespie event-driven Monte Carlo of all n surplus paths; supports
+    exponential, lognormal, gamma severity; returns `SimulationResult`
+  - `optimal_allocation()`: SLSQP optimisation of the allocation matrix under budget
+    balance and actuarial fairness equality constraints; objectives: min_max_ruin,
+    max_min_improvement; returns new pool instance
+  - `audit_trail()`: JSON-serialisable dict for FCA/regulatory documentation; includes
+    full parameter record, validation results, scale family warning
+  - `PerformanceWarning`: raised when simulation complexity or n > 30 (optimal_allocation)
+    is likely to be slow
+- New module `src/insurance_optimise/risk_sharing.py` (~450 LOC)
+- Exported `LinearRiskSharingPool`, `RuinResult`, `SimulationResult`, `ValidationResult`,
+  `PerformanceWarning` from top-level `__init__.py`
+- Tests in `tests/test_risk_sharing.py`: 50 tests covering construction, input validation,
+  condition checking, ruin comparison (exact and simulation), simulate, optimal allocation,
+  audit trail, and edge cases
+
+### Changed
+- Version bumped from 0.5.0 to 0.6.0
+- Added risk-sharing and community insurance keywords to PyPI metadata
+
 ## [0.5.0] - 2026-04-02
 
 ### Added

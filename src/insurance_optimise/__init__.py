@@ -135,6 +135,27 @@ Robust reinsurance optimisation
 >>> sched = result.cession_schedule
 >>> sens = opt.sensitivity(param='ambiguity', n_points=10)
 
+The ``risk_sharing`` module (Denuit, Flores-Contró, Robert 2026, arXiv:2603.29530) provides:
+- LinearRiskSharingPool: n-participant community insurance pool with allocation matrix
+- Mean-proportional allocation rule (auditable, FCA-friendly)
+- Exact Cramér-Lundberg ruin probabilities (exponential severity)
+- Event-driven Monte Carlo simulation of surplus paths
+- SLSQP optimisation of the allocation matrix (min_max_ruin / max_min_improvement)
+- JSON audit trail for regulatory documentation
+
+Linear risk sharing
+--------------------
+>>> from insurance_optimise import LinearRiskSharingPool
+>>> pool = LinearRiskSharingPool.mean_proportional(
+...     claim_intensities=np.array([2.0, 1.0, 3.0]),
+...     claim_means=np.array([2.0, 0.5, 1.0]),
+...     safety_loadings=np.array([0.4, 0.4, 0.4]),
+... )
+>>> val = pool.validate_conditions()
+>>> print(val)
+>>> ruin = pool.ruin_comparison()
+>>> print(ruin.improvement)  # positive = pool reduced ruin probability
+
 References
 ----------
 - FCA PS21/11 (ENBP constraint): https://www.fca.org.uk/publication/policy/ps21-11.pdf
@@ -143,6 +164,7 @@ References
 - Emms & Haberman (2005): theoretical foundation for demand-linked pricing
 - Hedges (2025): model quality and loss ratio; arXiv:2512.03242
 - Boonen, Dela Vega, Garces (2026): robust dividend-reinsurance; arXiv:2603.25350
+- Denuit, Flores-Contró, Robert (2026): linear risk sharing; arXiv:2603.29530
 """
 
 from importlib.metadata import version, PackageNotFoundError
@@ -175,6 +197,13 @@ from insurance_optimise.result import (
     OptimisationResult,
     ScenarioResult,
 )
+from insurance_optimise.risk_sharing import (
+    LinearRiskSharingPool,
+    RuinResult,
+    SimulationResult,
+    ValidationResult,
+    PerformanceWarning,
+)
 from insurance_optimise.scenarios import ScenarioObjective
 from insurance_optimise.stochastic import ClaimsVarianceModel
 from insurance_optimise import demand
@@ -203,6 +232,11 @@ __all__ = [
     "ReinsuranceLine",
     "RobustReinsuranceOptimiser",
     "RobustReinsuranceResult",
+    "LinearRiskSharingPool",
+    "RuinResult",
+    "SimulationResult",
+    "ValidationResult",
+    "PerformanceWarning",
     "demand",
     "__version__",
 ]
